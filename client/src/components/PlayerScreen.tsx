@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { socket } from '../socket';
+import { socket, socketServerUrl } from '../socket';
 
 import WoodenButton from './WoodenButton';
 
@@ -106,6 +106,12 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
         setJoined(false);
     });
 
+    socket.on('connect_error', () => {
+      const target = socketServerUrl ? ` (${socketServerUrl})` : '';
+      setError(`Could not connect to game server${target}`);
+      setJoined(false);
+    });
+
     socket.on('room_closed', () => {
       setError('Room closed');
       setJoined(false);
@@ -127,6 +133,7 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
       socket.off('start_voting');
       socket.off('dp_choices');
       socket.off('error');
+      socket.off('connect_error');
       socket.off('room_closed');
     };
   }, []);

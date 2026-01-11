@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { socket } from '../socket';
+import { socket, socketServerUrl } from '../socket';
 
 interface Player {
   id: string;
@@ -123,7 +123,19 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
     });
 
     socket.on('connect_error', () => {
-      setError('Could not connect to game server');
+      const target = socketServerUrl ? ` (${socketServerUrl})` : '';
+      setError(`Could not connect to game server${target}`);
+      if (socketServerUrl) {
+        const healthUrl = socketServerUrl.replace(/\/$/, '') + '/health';
+        fetch(healthUrl)
+          .then(r => (r.ok ? r.json() : null))
+          .then(data => {
+            if (data?.ok) setError(`Game server is reachable, but Socket.IO failed${target}`);
+          })
+          .catch(() => {
+            // ignore
+          });
+      }
     });
 
     socket.on('disconnect', () => {

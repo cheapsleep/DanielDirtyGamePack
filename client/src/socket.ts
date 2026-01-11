@@ -11,7 +11,16 @@ const serverParamFromHash = (() => {
   return new URLSearchParams(hash.slice(qIndex + 1)).get('server') ?? undefined;
 })();
 const serverParam = serverParamFromSearch ?? serverParamFromHash;
-const resolvedUrl = serverParam ?? envUrl ?? (isProd ? undefined : `http://${window.location.hostname}:3001`);
+const rawUrl = serverParam ?? envUrl ?? (isProd ? undefined : `http://${window.location.hostname}:3001`);
+const resolvedUrl = (() => {
+  if (!rawUrl) return undefined;
+  if (window.location.protocol === 'https:' && rawUrl.startsWith('http://')) {
+    return `https://${rawUrl.slice('http://'.length)}`;
+  }
+  return rawUrl;
+})();
+
+export const socketServerUrl = resolvedUrl;
 
 export const socket = io(resolvedUrl, {
     autoConnect: true
