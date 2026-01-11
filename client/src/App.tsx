@@ -58,14 +58,14 @@ function App() {
 
   if (isJoin) {
     return (
-      <div className="min-h-screen bg-slate-900 font-campfire overflow-hidden">
+      <div className="min-h-screen bg-slate-900 font-thertole overflow-hidden">
         <PlayerScreen onBack={() => (window.location.hash = '#/join')} />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 font-campfire overflow-hidden">
+    <div className="min-h-screen bg-slate-900 font-thertole overflow-hidden">
       {view === 'SPLASH' && (
         <SplashScreen onComplete={handleSplashComplete} />
       )}

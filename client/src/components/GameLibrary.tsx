@@ -6,7 +6,7 @@ interface GameLibraryProps {
   onJoinGame: () => void;
 }
 
-export default function GameLibrary({ onSelectGame, onJoinGame }: GameLibraryProps) {
+export default function GameLibrary({ onSelectGame }: GameLibraryProps) {
   const games = [
     {
       id: 'nasty-libs',
@@ -31,9 +31,7 @@ export default function GameLibrary({ onSelectGame, onJoinGame }: GameLibraryPro
           Game Library
         </h1>
         <div className="flex gap-4">
-             <WoodenButton variant="white" onClick={onJoinGame} className="text-lg px-6 py-2">
-                Join Existing Game
-             </WoodenButton>
+             {/* Join Button Removed */}
         </div>
       </div>
 

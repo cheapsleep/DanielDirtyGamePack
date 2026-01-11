@@ -7,7 +7,8 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        'campfire': ['Campfire', 'sans-serif'],
+        'campfire': ['Thertole', 'Campfire', 'sans-serif'],
+        'thertole': ['Thertole', 'sans-serif'],
       },
     },
   },

@@ -52,6 +52,7 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
   const [timeLeft, setTimeLeft] = useState<number>(0);
   const [error, setError] = useState<string>('');
   const [retryKey, setRetryKey] = useState(0);
+  const [shortUrl, setShortUrl] = useState<string>('');
 
   useEffect(() => {
     const storageKey = `host:${gameId}`;
@@ -239,6 +240,25 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
   const joinUrl = `${joinBase}#/join?room=${room.code}${
     publicServerUrl ? `&server=${encodeURIComponent(publicServerUrl)}` : ''
   }`;
+
+  useEffect(() => {
+    if (shortUrl || !joinUrl) return;
+    
+    // Attempt to shorten URL
+    fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(joinUrl)}`)
+      .then(res => res.text())
+      .then(text => {
+        if (text.startsWith('http')) {
+          setShortUrl(text);
+        }
+      })
+      .catch(() => {
+        // Fallback to long URL silently
+      });
+  }, [joinUrl, shortUrl]);
+
+  const displayUrl = shortUrl || joinUrl;
+  
   const controllerName =
     room.players.find(p => p.id === room.controllerPlayerId)?.name ?? 'Nobody yet';
 
@@ -247,7 +267,7 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
       <div className="flex justify-between items-center mb-8 border-b border-slate-700 pb-4">
         <div>
           <h2 className="text-xl text-slate-400">JOIN AT</h2>
-          <h1 className="text-4xl font-bold text-blue-400">{joinUrl}</h1>
+          <h1 className="text-4xl font-bold text-blue-400">{displayUrl}</h1>
           <div className="text-sm text-slate-500 mt-2 uppercase tracking-widest">{title}</div>
         </div>
         <div className="text-center">
