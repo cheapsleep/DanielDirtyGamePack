@@ -65,16 +65,22 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
     })();
 
     let didGetRoomUpdate = false;
-    const fallbackTimer = window.setTimeout(() => {
-      if (didGetRoomUpdate) return;
-      socket.emit('create_room', { gameId });
-    }, 900);
+    let didCreateRoom = false;
+    let fallbackTimer: number | undefined;
 
-    if (saved?.roomCode && saved?.hostKey) {
-      socket.emit('join_room', { roomCode: saved.roomCode, isHost: true, hostKey: saved.hostKey });
-    } else {
+    const createRoom = () => {
+      if (didCreateRoom) return;
+      didCreateRoom = true;
       socket.emit('create_room', { gameId });
-    }
+    };
+
+    const joinOrCreate = () => {
+      if (saved?.roomCode && saved?.hostKey) {
+        socket.emit('join_room', { roomCode: saved.roomCode, isHost: true, hostKey: saved.hostKey });
+      } else {
+        createRoom();
+      }
+    };
 
     socket.on('room_created', (data: any) => {
       const roomCode = String(data?.roomCode ?? '');
@@ -107,11 +113,38 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
     });
 
     socket.on('error', (data) => {
-      setError(String(data?.message ?? 'Unknown error'));
+      const message = String(data?.message ?? 'Unknown error');
+      setError(message);
+      if (!didGetRoomUpdate && saved?.roomCode && (message.includes('Room not found') || message.includes('Invalid host key'))) {
+        sessionStorage.removeItem(storageKey);
+        createRoom();
+      }
     });
 
+    socket.on('connect_error', () => {
+      setError('Could not connect to game server');
+    });
+
+    socket.on('disconnect', () => {
+      setError('Disconnected from game server');
+    });
+
+    fallbackTimer = window.setTimeout(() => {
+      if (didGetRoomUpdate) return;
+      if (saved?.roomCode && saved?.hostKey && !didCreateRoom) return;
+      createRoom();
+    }, 1500);
+
+    if (socket.connected) {
+      joinOrCreate();
+    } else {
+      socket.once('connect', joinOrCreate);
+    }
+
     return () => {
-      window.clearTimeout(fallbackTimer);
+      if (fallbackTimer) window.clearTimeout(fallbackTimer);
+      socket.off('connect_error');
+      socket.off('disconnect');
       socket.off('room_created');
       socket.off('room_update');
       socket.off('new_prompt');
