@@ -60,8 +60,17 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
     socket.on('joined', (data: any) => {
       setJoined(true);
       setError('');
-      if (data?.roomCode) setRoomCode(String(data.roomCode));
-      if (data?.playerId) setPlayerId(String(data.playerId));
+      const nextRoomCode = String(data?.roomCode ?? roomCode).toUpperCase();
+      const nextPlayerId = String(data?.playerId ?? '');
+      if (nextRoomCode) setRoomCode(nextRoomCode);
+      if (nextPlayerId) {
+        setPlayerId(nextPlayerId);
+        try {
+          localStorage.setItem(`playerId:${nextRoomCode}`, nextPlayerId);
+        } catch {
+          // ignore
+        }
+      }
       if (data?.gameId) setGameId(String(data.gameId));
     });
 
@@ -102,6 +111,13 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
       setJoined(false);
       setRoom(null);
       setSubmitted(false);
+      if (roomCode) {
+        try {
+          localStorage.removeItem(`playerId:${roomCode.toUpperCase()}`);
+        } catch {
+          // ignore
+        }
+      }
     });
 
     return () => {
@@ -118,8 +134,20 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
   const handleJoin = (e: React.FormEvent) => {
     e.preventDefault();
     if (!roomCode || !playerName) return;
-    
-    socket.emit('join_room', { roomCode, playerName, isHost: false });
+
+    let rememberedPlayerId: string | null = null;
+    try {
+      rememberedPlayerId = localStorage.getItem(`playerId:${roomCode.toUpperCase()}`);
+    } catch {
+      rememberedPlayerId = null;
+    }
+
+    socket.emit('join_room', {
+      roomCode,
+      playerName,
+      isHost: false,
+      playerId: rememberedPlayerId ?? undefined
+    });
   };
 
   const handleStartGame = () => {

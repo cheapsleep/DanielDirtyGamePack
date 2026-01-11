@@ -29,8 +29,8 @@ io.on('connection', (socket) => {
   console.log('A user connected:', socket.id);
 
   // Handle joining a room
-  socket.on('join_room', ({ roomCode, playerName, isHost }) => {
-    gameManager.handleJoin(socket, roomCode, playerName, isHost);
+  socket.on('join_room', (data) => {
+    gameManager.handleJoin(socket, data);
   });
 
   // Handle creating a room (host only)

@@ -17,6 +17,8 @@ interface Room {
   code: string;
   gameId: GameId;
   hostSocketId: string;
+  hostKey: string;
+  hostConnected: boolean;
   controllerPlayerId?: string;
   players: Player[];
   state:
@@ -57,11 +59,14 @@ export class GameManager {
 
   handleCreateRoom(socket: Socket, gameId?: GameId) {
     const resolvedGameId: GameId = gameId ?? 'nasty-libs';
-    const roomCode = this.generateRoomCode();
+    const roomCode = this.generateUniqueRoomCode();
+    const hostKey = uuidv4();
     const newRoom: Room = {
       code: roomCode,
       gameId: resolvedGameId,
       hostSocketId: socket.id,
+      hostKey,
+      hostConnected: true,
       players: [],
       state: 'LOBBY',
       currentRound: 0,
@@ -75,13 +80,27 @@ export class GameManager {
     this.socketRoomMap.set(socket.id, roomCode);
     
     socket.join(roomCode);
-    socket.emit('room_created', { roomCode });
+    socket.emit('room_created', { roomCode, hostKey });
     this.io.to(roomCode).emit('room_update', this.getRoomPublicState(newRoom));
     console.log(`Room created: ${roomCode} by ${socket.id}`);
   }
 
-  handleJoin(socket: Socket, roomCode: string, playerName: string, isHost: boolean) {
-    const room = this.rooms.get(roomCode.toUpperCase());
+  handleJoin(
+    socket: Socket,
+    data: { roomCode?: string; playerName?: string; isHost?: boolean; playerId?: string; hostKey?: string }
+  ) {
+    const roomCode = String(data?.roomCode ?? '').trim().toUpperCase();
+    const playerName = String(data?.playerName ?? '').trim();
+    const isHost = Boolean(data?.isHost);
+    const playerId = data?.playerId ? String(data.playerId) : undefined;
+    const hostKey = data?.hostKey ? String(data.hostKey) : undefined;
+
+    if (!roomCode) {
+      socket.emit('error', { message: 'Room code is required' });
+      return;
+    }
+
+    const room = this.rooms.get(roomCode);
     
     if (!room) {
       socket.emit('error', { message: 'Room not found' });
@@ -94,40 +113,60 @@ export class GameManager {
     }
 
     if (isHost) {
-      // Reconnect host logic if needed, or just deny if host already exists and is connected
-      if (room.hostSocketId && room.hostSocketId !== socket.id) {
-          // simple reconnect logic: allow if previous host disconnected
-          // for now, just update host socket
-           room.hostSocketId = socket.id;
+      if (!hostKey || hostKey !== room.hostKey) {
+        socket.emit('error', { message: 'Invalid host key' });
+        return;
       }
+
+      room.hostSocketId = socket.id;
+      room.hostConnected = true;
+      socket.emit('host_joined', { roomCode: room.code, gameId: room.gameId });
     } else {
       // Player join
-      const existingPlayer = room.players.find(p => p.name === playerName);
-      if (existingPlayer) {
-          existingPlayer.socketId = socket.id;
-          existingPlayer.isConnected = true;
-          if (!room.controllerPlayerId && !existingPlayer.isBot) room.controllerPlayerId = existingPlayer.id;
-          socket.emit('joined', { roomCode: room.code, playerId: existingPlayer.id, gameId: room.gameId });
+      if (!playerName) {
+        socket.emit('error', { message: 'Name is required' });
+        return;
+      }
+
+      const existingById = playerId ? room.players.find(p => p.id === playerId) : undefined;
+      if (existingById) {
+        existingById.socketId = socket.id;
+        existingById.isConnected = true;
+        if (!room.controllerPlayerId && !existingById.isBot) room.controllerPlayerId = existingById.id;
+        socket.emit('joined', { roomCode: room.code, playerId: existingById.id, gameId: room.gameId });
       } else {
-        const newPlayer: Player = {
-          id: uuidv4(),
-          name: playerName,
-          socketId: socket.id,
-          score: 0,
-          isConnected: true,
-          answers: {}
-        };
-        room.players.push(newPlayer);
-        if (!room.controllerPlayerId) room.controllerPlayerId = newPlayer.id;
-        socket.emit('joined', { roomCode: room.code, playerId: newPlayer.id, gameId: room.gameId });
+        const existingByName = room.players.find(p => p.name === playerName);
+        if (existingByName && existingByName.isConnected && !existingByName.isBot) {
+          socket.emit('error', { message: 'That name is already taken in this room' });
+          return;
+        }
+
+        if (existingByName && !existingByName.isConnected && !existingByName.isBot) {
+          existingByName.socketId = socket.id;
+          existingByName.isConnected = true;
+          if (!room.controllerPlayerId) room.controllerPlayerId = existingByName.id;
+          socket.emit('joined', { roomCode: room.code, playerId: existingByName.id, gameId: room.gameId });
+        } else {
+          const newPlayer: Player = {
+            id: uuidv4(),
+            name: playerName,
+            socketId: socket.id,
+            score: 0,
+            isConnected: true,
+            answers: {}
+          };
+          room.players.push(newPlayer);
+          if (!room.controllerPlayerId) room.controllerPlayerId = newPlayer.id;
+          socket.emit('joined', { roomCode: room.code, playerId: newPlayer.id, gameId: room.gameId });
+        }
       }
     }
 
-    this.socketRoomMap.set(socket.id, roomCode.toUpperCase());
-    socket.join(roomCode.toUpperCase());
+    this.socketRoomMap.set(socket.id, roomCode);
+    socket.join(roomCode);
 
     // Notify everyone in the room
-    this.io.to(roomCode.toUpperCase()).emit('room_update', this.getRoomPublicState(room));
+    this.io.to(roomCode).emit('room_update', this.getRoomPublicState(room));
   }
 
   handleCloseRoom(socket: Socket) {
@@ -198,6 +237,7 @@ export class GameManager {
         if (socket.id === room.hostSocketId) {
             // Host disconnected
             console.log('Host disconnected from room ' + roomCode);
+            room.hostConnected = false;
             // Optionally close room or wait for reconnect
         } else {
             const player = room.players.find(p => p.socketId === socket.id);
@@ -786,6 +826,14 @@ export class GameManager {
       result += characters.charAt(Math.floor(Math.random() * characters.length));
     }
     return result;
+  }
+
+  private generateUniqueRoomCode(): string {
+    for (let attempt = 0; attempt < 20; attempt++) {
+      const code = this.generateRoomCode();
+      if (!this.rooms.has(code)) return code;
+    }
+    return uuidv4().slice(0, 4).toUpperCase();
   }
 
   private getRoomPublicState(room: Room) {

@@ -53,13 +53,38 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
   const [error, setError] = useState<string>('');
 
   useEffect(() => {
-    socket.emit('create_room', { gameId });
+    const storageKey = `host:${gameId}`;
+    const saved = (() => {
+      try {
+        return JSON.parse(sessionStorage.getItem(storageKey) ?? 'null') as
+          | { roomCode: string; hostKey: string }
+          | null;
+      } catch {
+        return null;
+      }
+    })();
 
-    socket.on('room_created', () => {
-      // Waiting for room update
+    let didGetRoomUpdate = false;
+    const fallbackTimer = window.setTimeout(() => {
+      if (didGetRoomUpdate) return;
+      socket.emit('create_room', { gameId });
+    }, 900);
+
+    if (saved?.roomCode && saved?.hostKey) {
+      socket.emit('join_room', { roomCode: saved.roomCode, isHost: true, hostKey: saved.hostKey });
+    } else {
+      socket.emit('create_room', { gameId });
+    }
+
+    socket.on('room_created', (data: any) => {
+      const roomCode = String(data?.roomCode ?? '');
+      const hostKey = String(data?.hostKey ?? '');
+      if (!roomCode || !hostKey) return;
+      sessionStorage.setItem(storageKey, JSON.stringify({ roomCode, hostKey }));
     });
 
     socket.on('room_update', (roomState: RoomState) => {
+      didGetRoomUpdate = true;
       setRoom(roomState);
     });
 
@@ -86,6 +111,7 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
     });
 
     return () => {
+      window.clearTimeout(fallbackTimer);
       socket.off('room_created');
       socket.off('room_update');
       socket.off('new_prompt');
@@ -106,6 +132,7 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
 
   const handleBack = () => {
     socket.emit('close_room');
+    sessionStorage.removeItem(`host:${gameId}`);
     onBack();
   };
 
