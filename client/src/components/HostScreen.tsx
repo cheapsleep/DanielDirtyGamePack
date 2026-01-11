@@ -17,8 +17,9 @@ type GameState =
   | 'NL_RESULTS'
   | 'DP_PROBLEM_SUBMIT'
   | 'DP_PICK'
-  | 'DP_ANSWER'
-  | 'DP_VOTING'
+  | 'DP_DRAWING'
+  | 'DP_PRESENTING'
+  | 'DP_INVESTING'
   | 'DP_RESULTS'
   | 'END';
 
@@ -35,6 +36,12 @@ interface RoomState {
   problemsSubmitted?: number;
   problemsTotal?: number;
   selectionsMade?: number;
+  dpDrawings?: Record<string, string>;
+  currentPresenterId?: string;
+  currentInvestments?: Record<string, number>;
+  currentDrawing?: string;
+  currentTitle?: string;
+  currentProblem?: string;
 }
 
 import WoodenButton from './WoodenButton';
@@ -53,7 +60,24 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
   const [error, setError] = useState<string>('');
   const [retryKey, setRetryKey] = useState(0);
   const [shortUrl, setShortUrl] = useState<string>('');
+  const [presentationData, setPresentationData] = useState<{
+      presenterId: string;
+      drawing: string;
+      title: string;
+      prompt: string;
+  } | null>(null);
   
+  useEffect(() => {
+    if ((room?.state === 'DP_PRESENTING' || room?.state === 'DP_INVESTING') && !presentationData && room.currentDrawing) {
+        setPresentationData({
+            presenterId: room.currentPresenterId || '',
+            drawing: room.currentDrawing,
+            title: room.currentTitle || '',
+            prompt: room.currentProblem || ''
+        });
+    }
+  }, [room, presentationData]);
+
   const roomCode = room?.code;
   const joinBase =
     ((import.meta as any)?.env?.VITE_JOIN_URL as string | undefined) ??
@@ -127,6 +151,21 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
       setTimeLeft(data.timeLimit);
     });
 
+    socket.on('start_presentation', (data) => {
+        setPresentationData({
+            presenterId: data.presenterId,
+            drawing: data.drawing,
+            title: data.answer,
+            prompt: data.prompt
+        });
+        setTimeLeft(data.timeLimit);
+    });
+
+    socket.on('start_investing', (data) => {
+        // Keep presentation data but update timer
+        setTimeLeft(data.timeLimit);
+    });
+
     socket.on('start_voting', (data) => {
         setVotingOptions(data.answers);
         setTimeLeft(data.timeLimit);
@@ -188,6 +227,8 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
       socket.off('room_created');
       socket.off('room_update');
       socket.off('new_prompt');
+      socket.off('start_presentation');
+      socket.off('start_investing');
       socket.off('start_voting');
       socket.off('round_results');
       socket.off('game_over');
@@ -225,8 +266,8 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
     ? (room.gameId ?? gameId) === 'dubiously-patented' ? 'Dubiously Patented' : 'Nasty Libs'
     : '';
   const isPatented = room ? (room.gameId ?? gameId) === 'dubiously-patented' : false;
-  const isPromptPhase = room ? room.state === 'NL_ANSWER' || room.state === 'DP_ANSWER' : false;
-  const isVotingPhase = room ? room.state === 'NL_VOTING' || room.state === 'DP_VOTING' : false;
+  const isPromptPhase = room ? room.state === 'NL_ANSWER' : false;
+  const isVotingPhase = room ? room.state === 'NL_VOTING' : false;
   const isResultsPhase = room ? room.state === 'NL_RESULTS' || room.state === 'DP_RESULTS' : false;
   const isNastySetup = room ? room.state === 'NL_PROMPT_SUBMIT' : false;
   const displayUrl = shortUrl || joinUrl;
@@ -341,6 +382,81 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
           </div>
         )}
 
+        {room.state === 'DP_DRAWING' && (
+          <div className="text-center w-full max-w-4xl">
+             <h1 className="text-5xl font-bold mb-6 leading-tight">Players are inventing</h1>
+             <div className="text-slate-300 text-2xl mb-8">
+                Drawings Submitted: {Object.keys(room.dpDrawings || {}).length} / {room.players.length}
+             </div>
+             <div className="grid grid-cols-4 gap-4">
+                {room.players.map(p => (
+                    <div key={p.id} className={`p-4 rounded-lg border-2 ${room.dpDrawings?.[p.id] ? 'bg-green-900/50 border-green-500' : 'bg-slate-800 border-slate-700'}`}>
+                        {p.name}
+                        {room.dpDrawings?.[p.id] && ' ✓'}
+                    </div>
+                ))}
+             </div>
+          </div>
+        )}
+
+        {room.state === 'DP_PRESENTING' && presentationData && (
+            <div className="w-full h-full flex flex-col items-center justify-center relative">
+                 <div className="absolute top-0 right-0 p-4 text-4xl font-black text-white bg-slate-800 rounded-full w-24 h-24 flex items-center justify-center border-4 border-pink-500 z-10">
+                    {timeLeft}
+                </div>
+                <div className="text-center mb-4">
+                    <h2 className="text-2xl text-slate-400 mb-2">INVENTION PRESENTATION</h2>
+                    <h1 className="text-5xl font-black text-yellow-400 mb-2">{presentationData.title}</h1>
+                    <div className="text-xl text-slate-300">By {room.players.find(p => p.id === presentationData.presenterId)?.name}</div>
+                </div>
+                
+                <div className="bg-white p-4 rounded-xl shadow-2xl mb-6">
+                    <img src={presentationData.drawing} alt="Invention" className="max-h-[50vh] object-contain" />
+                </div>
+
+                <div className="bg-slate-800 p-6 rounded-xl max-w-3xl w-full text-center border-2 border-slate-600">
+                    <div className="text-sm font-black tracking-widest text-slate-400 mb-2">SOLVES THE PROBLEM</div>
+                    <p className="text-2xl">{presentationData.prompt}</p>
+                </div>
+            </div>
+        )}
+
+        {room.state === 'DP_INVESTING' && presentationData && (
+            <div className="w-full h-full flex flex-col items-center justify-center relative">
+                 <div className="absolute top-0 right-0 p-4 text-4xl font-black text-white bg-slate-800 rounded-full w-24 h-24 flex items-center justify-center border-4 border-green-500 z-10 animate-pulse">
+                    {timeLeft}
+                </div>
+                <h1 className="text-6xl font-black text-green-500 mb-12 animate-bounce">INVEST NOW!</h1>
+                
+                <div className="grid grid-cols-2 gap-12 items-center w-full max-w-5xl">
+                    <div className="text-center">
+                        <div className="bg-white p-2 rounded-xl inline-block mb-4 opacity-50">
+                            <img src={presentationData.drawing} alt="Invention" className="h-48 object-contain" />
+                        </div>
+                        <h2 className="text-3xl font-bold">{presentationData.title}</h2>
+                    </div>
+                    <div className="bg-slate-800 p-8 rounded-xl border-2 border-green-500 h-full flex flex-col justify-center">
+                        <h3 className="text-2xl text-slate-400 mb-6 text-center">Current Investments</h3>
+                        <div className="grid grid-cols-2 gap-4">
+                             {Object.entries(room.currentInvestments || {}).map(([pid, amount]) => {
+                                 const p = room.players.find(pl => pl.id === pid);
+                                 if (!p || amount <= 0) return null;
+                                 return (
+                                     <div key={pid} className="flex justify-between items-center bg-slate-900 p-3 rounded">
+                                         <span>{p.name}</span>
+                                         <span className="text-green-400 font-bold">${amount}</span>
+                                     </div>
+                                 );
+                             })}
+                             {Object.keys(room.currentInvestments || {}).length === 0 && (
+                                 <div className="col-span-2 text-center text-slate-500 italic">No investments yet...</div>
+                             )}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
+
         {isPromptPhase && (
             <div className="text-center relative">
                 <div className="absolute top-0 right-0 p-4 text-4xl font-black text-white bg-slate-800 rounded-full w-24 h-24 flex items-center justify-center border-4 border-pink-500">
@@ -404,7 +520,9 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
                                 <span className="text-3xl font-bold w-12">{idx + 1}</span>
                                 <span className="text-2xl">{p.name}</span>
                             </div>
-                            <span className="text-3xl font-bold text-green-400">{p.score}</span>
+                            <span className="text-3xl font-bold text-green-400">
+                                {isPatented ? '$' : ''}{p.score}
+                            </span>
                         </div>
                     ))}
                 </div>

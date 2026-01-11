@@ -29,8 +29,9 @@ interface Room {
     | 'NL_RESULTS'
     | 'DP_PROBLEM_SUBMIT'
     | 'DP_PICK'
-    | 'DP_ANSWER'
-    | 'DP_VOTING'
+    | 'DP_DRAWING'
+    | 'DP_PRESENTING'
+    | 'DP_INVESTING'
     | 'DP_RESULTS'
     | 'END';
   currentRound: number;
@@ -42,6 +43,10 @@ interface Room {
   dpAllProblems?: { playerId: string; text: string }[];
   dpChoicesByPlayer?: Record<string, string[]>;
   dpSelectedByPlayer?: Record<string, string>;
+  dpDrawings?: Record<string, string>; // playerId -> base64
+  presentationOrder?: string[];
+  currentPresenterId?: string;
+  currentInvestments?: Record<string, number>; // playerId -> amount
   answers: { playerId: string; answer: string }[];
   votes: Record<string, number>; // answerIndex -> count
   votedBy?: Record<string, boolean>;
@@ -218,6 +223,12 @@ export class GameManager {
       case 'SUBMIT_ANSWER':
         this.handleAnswer(room, socket.id, data.answer);
         break;
+      case 'SUBMIT_DRAWING':
+        this.handleSubmitDrawing(room, socket.id, data.drawing, data.title);
+        break;
+      case 'INVEST':
+        this.handleInvest(room, socket.id, data.amount);
+        break;
       case 'SUBMIT_VOTE':
         this.handleVote(room, socket.id, data.voteIndex);
         break;
@@ -387,27 +398,34 @@ export class GameManager {
       }
     }
 
-    if (room.state === 'DP_ANSWER') {
+    if (room.state === 'DP_DRAWING') {
       for (const bot of bots) {
-        if (room.state !== 'DP_ANSWER') break;
-        const already = room.answers.some(a => a.playerId === bot.id);
+        if (room.state !== 'DP_DRAWING') break;
+        const already = room.dpDrawings?.[bot.id];
         if (already) continue;
+        
         const problem = room.dpSelectedByPlayer?.[bot.id] ?? 'A problem.';
-        const answer = await this.generateBotPrompt('dp_answer', problem);
-        this.handleAnswer(room, bot.socketId, answer);
+        const title = await this.generateBotPrompt('dp_answer', problem);
+        
+        // Simple 1x1 transparent PNG base64
+        const drawing = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+        
+        this.handleSubmitDrawing(room, bot.socketId, drawing, title);
       }
     }
 
-    if (room.state === 'DP_VOTING') {
+    if (room.state === 'DP_INVESTING') {
       for (const bot of bots) {
-        if (room.state !== 'DP_VOTING') break;
-        const already = room.votedBy?.[bot.socketId];
-        if (already) continue;
-        const ownIndex = room.answers.findIndex(a => a.playerId === bot.id);
-        const options = room.answers.map((_, idx) => idx).filter(i => i !== ownIndex);
-        if (options.length === 0) continue;
-        const pick = options[Math.floor(Math.random() * options.length)];
-        this.handleVote(room, bot.socketId, pick);
+        if (room.state !== 'DP_INVESTING') break;
+        if (bot.id === room.currentPresenterId) continue;
+        
+        const already = room.currentInvestments?.[bot.id];
+        if (already !== undefined) continue;
+        
+        // Invest random amount (0 to current score, weighted towards middle)
+        const max = bot.score;
+        const amount = Math.floor(Math.random() * max * 0.5); // Invest up to 50%
+        this.handleInvest(room, bot.socketId, amount);
       }
     }
   }
@@ -531,6 +549,9 @@ export class GameManager {
       this.startNastyRound(room);
       return;
     }
+
+    // Initialize money for Dubiously Patented
+    room.players.forEach(p => { p.score = 1000; });
 
     room.totalRounds = 1;
     room.currentRound = 1;
@@ -682,11 +703,10 @@ export class GameManager {
     const activePlayers = this.getActivePlayers(room);
     if (Object.keys(room.dpSelectedByPlayer).length < activePlayers.length) return;
 
-    room.state = 'DP_ANSWER';
-    room.answers = [];
-    room.votes = {};
-    room.votedBy = {};
-
+    room.state = 'DP_DRAWING';
+    room.answers = []; // Used for titles
+    room.dpDrawings = {};
+    
     for (const p of activePlayers) {
       const prompt = room.dpSelectedByPlayer[p.id];
       if (prompt && p.socketId) {
@@ -694,20 +714,130 @@ export class GameManager {
           prompt,
           gameId: room.gameId,
           round: room.currentRound,
-          timeLimit: 90
+          timeLimit: 180 // More time for drawing
         });
       }
     }
 
     this.io.to(room.hostSocketId).emit('new_prompt', {
-      prompt: 'Players are pitching inventions...',
+      prompt: 'Players are drawing their inventions...',
       gameId: room.gameId,
       round: room.currentRound,
-      timeLimit: 90
+      timeLimit: 180
     });
 
     this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
     this.scheduleBotRun(room);
+  }
+
+  private handleSubmitDrawing(room: Room, socketId: string, drawing: string, title: string) {
+    if (room.gameId !== 'dubiously-patented') return;
+    if (room.state !== 'DP_DRAWING') return;
+    
+    const player = room.players.find(p => p.socketId === socketId);
+    if (!player) return;
+
+    room.dpDrawings ??= {};
+    if (room.dpDrawings[player.id]) return; // Already submitted
+
+    room.dpDrawings[player.id] = drawing || ''; // Base64 string
+    
+    // Store title as "answer" for consistency or separate field
+    room.answers.push({ playerId: player.id, answer: title || 'Untitled Invention' });
+
+    this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+
+    const activePlayers = this.getActivePlayers(room);
+    if (Object.keys(room.dpDrawings).length < activePlayers.length) return;
+
+    // Start presentations
+    room.presentationOrder = activePlayers.map(p => p.id).sort(() => 0.5 - Math.random());
+    this.startPresentation(room);
+  }
+
+  private startPresentation(room: Room) {
+    if (!room.presentationOrder || room.presentationOrder.length === 0) {
+        this.showResults(room);
+        return;
+    }
+
+    const nextId = room.presentationOrder.pop();
+    room.currentPresenterId = nextId;
+    room.state = 'DP_PRESENTING';
+    room.currentInvestments = {};
+
+    this.io.to(room.code).emit('start_presentation', {
+        presenterId: nextId,
+        timeLimit: 60
+    });
+    this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+    
+    // Auto-advance after 60s (handled by client timer mostly, but good to have server enforcement if needed)
+    // For now, rely on manual "Next" or just let the client timer run out and host triggers? 
+    // Better: Set a timeout or let the host trigger "Next Phase". 
+    // User said "have a minute each". 
+    // Let's implement auto-transition to Investing after 60s.
+    setTimeout(() => {
+        if (room.state === 'DP_PRESENTING' && room.currentPresenterId === nextId) {
+            this.startInvesting(room);
+        }
+    }, 60000);
+  }
+
+  private startInvesting(room: Room) {
+    room.state = 'DP_INVESTING';
+    this.io.to(room.code).emit('start_investing', {
+        presenterId: room.currentPresenterId,
+        timeLimit: 30
+    });
+    this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+    
+    this.scheduleBotRun(room);
+    
+    setTimeout(() => {
+        if (room.state === 'DP_INVESTING' && room.currentPresenterId === room.currentPresenterId) {
+            this.startPresentation(room);
+        }
+    }, 30000);
+  }
+
+  private handleInvest(room: Room, socketId: string, amount: number) {
+    if (room.state !== 'DP_INVESTING') return;
+    const player = room.players.find(p => p.socketId === socketId);
+    if (!player) return;
+    if (player.id === room.currentPresenterId) return; // Can't invest in self (or maybe you can? User didn't say. Assuming no.)
+
+    const investment = Math.max(0, Math.min(Number(amount) || 0, player.score));
+    
+    room.currentInvestments ??= {};
+    if (room.currentInvestments[player.id]) return; // Already invested
+
+    room.currentInvestments[player.id] = investment;
+    
+    // Deduct immediately or at end? 
+    // "Other players can choose to invest a certain amount... whoever has most money wins"
+    // If I invest 100, I lose 100. The presenter gains 100? 
+    // Or is it a vote? "Invest" implies transfer.
+    // Let's transfer immediately.
+    player.score -= investment;
+    const presenter = room.players.find(p => p.id === room.currentPresenterId);
+    if (presenter) {
+        presenter.score += investment;
+    }
+
+    this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+
+    // Check if everyone (except presenter) has invested
+    const activePlayers = this.getActivePlayers(room);
+    const potentialInvestors = activePlayers.filter(p => p.id !== room.currentPresenterId).length;
+    if (Object.keys(room.currentInvestments).length >= potentialInvestors) {
+        // All done, move to next presentation early?
+        // Wait for timer or just go? 
+        // Let's wait for timer to give people time to think/change? No, usually speed is good.
+        // But I set a timeout in startInvesting. 
+        // I should probably clear that timeout or just let it race. 
+        // Simpler: Just wait for timer.
+    }
   }
 
   private handleAnswer(room: Room, socketId: string, answerText: string) {
@@ -734,29 +864,18 @@ export class GameManager {
       this.scheduleBotRun(room);
       return;
     }
-
-    if (room.state !== 'DP_ANSWER') return;
-    if (room.answers.some(a => a.playerId === player.id)) return;
-    room.answers.push({ playerId: player.id, answer });
-
-    const activePlayers = this.getActivePlayers(room);
-    if (room.answers.length < activePlayers.length) return;
-
-    room.state = 'DP_VOTING';
-    room.votes = {};
-    room.votedBy = {};
-    this.io.to(room.code).emit('start_voting', {
-      answers: room.answers.map(a => a.answer),
-      timeLimit: 30
-    });
-    this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
-    this.scheduleBotRun(room);
   }
 
   private handleVote(room: Room, socketId: string, voteIndex: number) {
-    if (room.state !== 'NL_VOTING' && room.state !== 'DP_VOTING') return;
+    if (room.state !== 'NL_VOTING') return;
     const player = room.players.find(p => p.socketId === socketId);
     if (!player) return;
+
+    // Fix: Nasty Libs contestants cannot vote
+    if (room.gameId === 'nasty-libs' && room.nastyContestantIds?.includes(player.id)) {
+        this.io.to(socketId).emit('error', { message: "You are a contestant and cannot vote!" });
+        return;
+    }
 
     room.votedBy ??= {};
     if (room.votedBy[socketId]) return;
@@ -765,7 +884,7 @@ export class GameManager {
     if (!Number.isFinite(index)) return;
     if (index < 0 || index >= room.answers.length) return;
     
-    // Prevent self-voting
+    // Prevent self-voting (redundant if contestants excluded, but good for safety)
     if (room.answers[index]?.playerId === player.id) {
         this.io.to(socketId).emit('error', { message: "You can't vote for yourself!", code: 'GAME_ERROR' });
         return;
@@ -775,15 +894,24 @@ export class GameManager {
     room.votes[index] = (room.votes[index] || 0) + 1;
 
     const activePlayers = this.getActivePlayers(room);
+    // In Nasty Libs, contestants don't vote. So total votes needed = players - 2.
+    const expectedVotes = Math.max(0, activePlayers.length - (room.nastyContestantIds?.length ?? 0));
+    
     const totalVotes = Object.values(room.votes).reduce((a, b) => a + b, 0);
-    if (totalVotes < activePlayers.length) return;
+    if (totalVotes < expectedVotes) return;
 
     this.showResults(room);
   }
 
   private showResults(room: Room) {
-    if (room.state !== 'NL_VOTING' && room.state !== 'DP_VOTING') return;
-    room.state = room.gameId === 'nasty-libs' ? 'NL_RESULTS' : 'DP_RESULTS';
+    if (room.state !== 'NL_VOTING' && room.state !== 'DP_PRESENTING') return; // DP uses end game after presentations
+    
+    if (room.gameId === 'dubiously-patented') {
+        this.endGame(room);
+        return;
+    }
+
+    room.state = 'NL_RESULTS';
 
     const roundResults = room.answers.map((a, index) => {
       const votes = room.votes[index] || 0;
@@ -861,7 +989,13 @@ export class GameManager {
       promptSubmissions: room.nastyPromptSubmissions?.length ?? 0,
       problemsSubmitted: room.dpProblemsByPlayer ? Object.keys(room.dpProblemsByPlayer).length : 0,
       problemsTotal: this.getActivePlayers(room).length,
-      selectionsMade: room.dpSelectedByPlayer ? Object.keys(room.dpSelectedByPlayer).length : 0
+      selectionsMade: room.dpSelectedByPlayer ? Object.keys(room.dpSelectedByPlayer).length : 0,
+      drawingsSubmitted: room.dpDrawings ? Object.keys(room.dpDrawings).length : 0,
+      currentPresenter: room.currentPresenterId ? room.players.find(p => p.id === room.currentPresenterId)?.name : undefined,
+      currentPresenterId: room.currentPresenterId,
+      currentDrawing: room.currentPresenterId && room.dpDrawings ? room.dpDrawings[room.currentPresenterId] : undefined,
+      currentTitle: room.currentPresenterId && room.answers ? room.answers.find(a => a.playerId === room.currentPresenterId)?.answer : undefined,
+      currentProblem: room.currentPresenterId && room.dpSelectedByPlayer ? room.dpSelectedByPlayer[room.currentPresenterId] : undefined
     };
   }
 }

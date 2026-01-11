@@ -1,7 +1,101 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { socket, socketServerUrl } from '../socket';
 
 import WoodenButton from './WoodenButton';
+
+// Simple drawing canvas
+function DrawingCanvas({ onChange }: { onChange: (data: string) => void }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#000';
+    
+    // White background
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }, []);
+
+  const getPos = (e: any) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    return {
+      x: clientX - rect.left,
+      y: clientY - rect.top
+    };
+  };
+
+  const start = (e: any) => {
+    e.preventDefault(); // prevent scroll
+    setIsDrawing(true);
+    const ctx = canvasRef.current?.getContext('2d');
+    if (!ctx) return;
+    const { x, y } = getPos(e);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+  };
+
+  const draw = (e: any) => {
+    e.preventDefault();
+    if (!isDrawing) return;
+    const ctx = canvasRef.current?.getContext('2d');
+    if (!ctx) return;
+    const { x, y } = getPos(e);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+  };
+
+  const stop = () => {
+    if (isDrawing) {
+      setIsDrawing(false);
+      onChange(canvasRef.current?.toDataURL() || '');
+    }
+  };
+
+  const clear = () => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) return;
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    onChange(canvas.toDataURL());
+  };
+
+  return (
+    <div className="flex flex-col gap-2">
+      <canvas
+        ref={canvasRef}
+        width={300}
+        height={300}
+        className="bg-white rounded-lg cursor-crosshair touch-none mx-auto"
+        onMouseDown={start}
+        onMouseMove={draw}
+        onMouseUp={stop}
+        onMouseLeave={stop}
+        onTouchStart={start}
+        onTouchMove={draw}
+        onTouchEnd={stop}
+      />
+      <button 
+        type="button" 
+        onClick={clear}
+        className="text-xs text-slate-400 underline"
+      >
+        Clear Drawing
+      </button>
+    </div>
+  );
+}
 
 interface PlayerScreenProps {
   onBack: () => void;
@@ -15,8 +109,9 @@ type GameState =
   | 'NL_RESULTS'
   | 'DP_PROBLEM_SUBMIT'
   | 'DP_PICK'
-  | 'DP_ANSWER'
-  | 'DP_VOTING'
+  | 'DP_DRAWING'
+  | 'DP_PRESENTING'
+  | 'DP_INVESTING'
   | 'DP_RESULTS'
   | 'END';
 
@@ -47,6 +142,9 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
   const [problemsDraft, setProblemsDraft] = useState<string[]>(['', '', '']);
   const [dpChoices, setDpChoices] = useState<string[]>([]);
   const [dpSelected, setDpSelected] = useState<string>('');
+  const [drawingDraft, setDrawingDraft] = useState<string>('');
+  const [investmentAmount, setInvestmentAmount] = useState<string>('');
+  const [currentPresenterId, setCurrentPresenterId] = useState<string>('');
 
   useEffect(() => {
     const hash = window.location.hash;
@@ -101,6 +199,17 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
       setSubmitted(false);
     });
 
+    socket.on('start_presentation', (data: any) => {
+        setCurrentPresenterId(data.presenterId);
+        setSubmitted(false);
+    });
+
+    socket.on('start_investing', (data: any) => {
+        setCurrentPresenterId(data.presenterId);
+        setSubmitted(false);
+        setInvestmentAmount('');
+    });
+
     socket.on('error', (data) => {
         if (data?.code === 'GAME_ERROR') {
           setSubmitted(false);
@@ -137,6 +246,8 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
       socket.off('new_prompt');
       socket.off('start_voting');
       socket.off('dp_choices');
+      socket.off('start_presentation');
+      socket.off('start_investing');
       socket.off('error');
       socket.off('connect_error');
       socket.off('room_closed');
@@ -202,6 +313,22 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
 
   const handleSubmitAnswer = (answer: string) => {
       socket.emit('game_action', { action: 'SUBMIT_ANSWER', answer });
+      setSubmitted(true);
+  };
+
+  const handleSubmitDrawing = (title: string) => {
+    socket.emit('game_action', { 
+        action: 'SUBMIT_DRAWING', 
+        drawing: drawingDraft, 
+        title 
+    });
+    setSubmitted(true);
+  };
+
+  const handleInvest = () => {
+      const amount = parseInt(investmentAmount);
+      if (isNaN(amount) || amount < 0) return;
+      socket.emit('game_action', { action: 'INVEST', amount });
       setSubmitted(true);
   };
 
@@ -425,9 +552,48 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
           </div>
         )}
 
-        {(gameState === 'NL_ANSWER' || gameState === 'DP_ANSWER') && (
+        {gameState === 'DP_DRAWING' && (
+             <div className="w-full max-w-xl mx-auto text-center">
+                 {submitted ? (
+                     <div>
+                         <h2 className="text-2xl font-bold mb-4">Invention Submitted!</h2>
+                         <p className="text-slate-400">Waiting for others...</p>
+                     </div>
+                 ) : (
+                     <>
+                        <div className="mb-4">
+                            <h2 className="text-xl font-bold text-pink-500 mb-2">{prompt}</h2>
+                            <p className="text-sm text-slate-400">Draw your invention below!</p>
+                        </div>
+                        <div className="mb-4 flex justify-center">
+                            <DrawingCanvas onChange={setDrawingDraft} />
+                        </div>
+                        <input 
+                            type="text"
+                            value={answerDraft}
+                            onChange={(e) => setAnswerDraft(e.target.value)}
+                            className="w-full p-4 bg-slate-800 rounded-xl text-lg mb-4 focus:ring-2 focus:ring-pink-500 outline-none"
+                            placeholder="Name your invention..."
+                            maxLength={50}
+                        />
+                        <WoodenButton 
+                            variant="red"
+                            onClick={() => {
+                                const text = answerDraft.trim();
+                                if (text && drawingDraft) handleSubmitDrawing(text);
+                            }}
+                            className="w-full"
+                        >
+                            SUBMIT INVENTION
+                        </WoodenButton>
+                     </>
+                 )}
+             </div>
+        )}
+
+        {gameState === 'NL_ANSWER' && (
             <div className="w-full">
-                {gameState === 'NL_ANSWER' && !isContestant ? (
+                {!isContestant ? (
                   <div className="text-center">
                     <h2 className="text-2xl font-bold mb-4">Watch for voting</h2>
                     <p className="text-slate-400">Contestants are answering.</p>
@@ -440,12 +606,12 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
                 ) : (
                     <>
                         <div className="text-center mb-4">
-                          <div className="text-sm font-black tracking-widest text-slate-400">{promptTitle}</div>
+                          <div className="text-sm font-black tracking-widest text-slate-400">PROMPT</div>
                           <h2 className="text-xl font-bold">{prompt}</h2>
                         </div>
                         <textarea 
                             className="w-full h-40 bg-slate-800 p-4 rounded-xl text-lg mb-4 focus:ring-2 focus:ring-pink-500 outline-none resize-none"
-                            placeholder={answerPlaceholder}
+                            placeholder="Type something funny..."
                             value={answerDraft}
                             onChange={(e) => setAnswerDraft(e.target.value)}
                         />
@@ -464,9 +630,71 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
             </div>
         )}
 
-        {(gameState === 'NL_VOTING' || gameState === 'DP_VOTING') && (
+        {gameState === 'DP_PRESENTING' && (
+            <div className="text-center">
+                <h2 className="text-2xl font-bold mb-4">Presentation Time!</h2>
+                <p className="text-slate-400">Look at the main screen.</p>
+                {playerId === currentPresenterId && (
+                    <p className="text-pink-500 font-bold mt-4 animate-pulse">IT'S YOUR TURN!</p>
+                )}
+            </div>
+        )}
+
+        {gameState === 'DP_INVESTING' && (
+            <div className="w-full max-w-md mx-auto text-center">
+                {playerId === currentPresenterId ? (
+                    <div>
+                        <h2 className="text-2xl font-bold mb-4">Investors are deciding...</h2>
+                        <p className="text-slate-400">Good luck!</p>
+                    </div>
+                ) : submitted ? (
+                    <div>
+                        <h2 className="text-2xl font-bold mb-4">Investment Locked!</h2>
+                        <p className="text-slate-400">Waiting for results...</p>
+                    </div>
+                ) : (
+                    <>
+                        <h2 className="text-xl font-bold mb-2">Invest in this invention?</h2>
+                        <p className="text-slate-400 mb-6">You have ${room?.players?.find(p => p.id === playerId)?.score ?? 0}</p>
+                        
+                        <div className="flex gap-2 mb-4">
+                            <input 
+                                type="number"
+                                value={investmentAmount}
+                                onChange={(e) => setInvestmentAmount(e.target.value)}
+                                className="w-full p-4 bg-slate-800 rounded-xl text-2xl font-bold text-center focus:ring-2 focus:ring-green-500 outline-none"
+                                placeholder="$0"
+                                min="0"
+                                max={room?.players?.find(p => p.id === playerId)?.score ?? 0}
+                            />
+                        </div>
+                        
+                        <div className="grid grid-cols-3 gap-2 mb-4">
+                            <button type="button" onClick={() => setInvestmentAmount('0')} className="bg-slate-700 p-2 rounded">0</button>
+                            <button type="button" onClick={() => setInvestmentAmount('100')} className="bg-slate-700 p-2 rounded">100</button>
+                            <button type="button" onClick={() => setInvestmentAmount('500')} className="bg-slate-700 p-2 rounded">500</button>
+                        </div>
+
+                        <WoodenButton 
+                            variant="red"
+                            onClick={handleInvest}
+                            className="w-full"
+                        >
+                            INVEST
+                        </WoodenButton>
+                    </>
+                )}
+            </div>
+        )}
+
+        {gameState === 'NL_VOTING' && (
             <div className="w-full">
-                {submitted ? (
+                {isContestant ? (
+                    <div className="text-center">
+                        <h2 className="text-2xl font-bold mb-4">Audience Voting</h2>
+                        <p className="text-slate-400">You are in this round, so you can't vote.</p>
+                    </div>
+                ) : submitted ? (
                     <div className="text-center">
                         <h2 className="text-2xl font-bold mb-4">Vote Cast!</h2>
                         <p className="text-slate-400">Look at the main screen.</p>
