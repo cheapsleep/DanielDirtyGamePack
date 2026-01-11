@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: 'Campfire';
+  src: url('./assets/fonts/Campfire.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+body {
+  font-family: 'Campfire', 'Carter One', system-ui, sans-serif;
+  @apply bg-slate-900 text-white;
+}
