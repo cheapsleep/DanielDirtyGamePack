@@ -228,8 +228,7 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
     ((import.meta as any)?.env?.VITE_JOIN_URL as string | undefined) ??
     `http://${window.location.hostname}:${window.location.port}`;
   const publicServerUrl =
-    ((import.meta as any)?.env?.VITE_PUBLIC_SERVER_URL as string | undefined) ??
-    ((import.meta as any)?.env?.VITE_SERVER_URL as string | undefined);
+    ((import.meta as any)?.env?.VITE_PUBLIC_SERVER_URL as string | undefined) ?? socketServerUrl;
   const joinUrl = `${joinBase}#/join?room=${room.code}${
     publicServerUrl ? `&server=${encodeURIComponent(publicServerUrl)}` : ''
   }`;
