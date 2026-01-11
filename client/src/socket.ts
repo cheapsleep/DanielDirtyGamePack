@@ -18,10 +18,27 @@ const rawUrl =
   (isProd ? defaultProdServerUrl : `http://${window.location.hostname}:3001`);
 const resolvedUrl = (() => {
   if (!rawUrl) return undefined;
-  if (window.location.protocol === 'https:' && rawUrl.startsWith('http://')) {
-    return `https://${rawUrl.slice('http://'.length)}`;
+  const trimmed = String(rawUrl).trim();
+  const upgradedForHttps =
+    window.location.protocol === 'https:' && trimmed.startsWith('http://')
+      ? `https://${trimmed.slice('http://'.length)}`
+      : trimmed;
+
+  if (!isProd) return upgradedForHttps;
+
+  if (upgradedForHttps.includes('onrender.com')) return upgradedForHttps;
+
+  const host = window.location.hostname;
+  const looksLikeVercel = host.endsWith('vercel.app') || host.endsWith('vercel.app.');
+  const pointsAtSameHost = upgradedForHttps.includes(host);
+  const pointsAtPort3001 = upgradedForHttps.includes(':3001');
+  const pointsAtVercel = upgradedForHttps.includes('vercel.app');
+
+  if ((looksLikeVercel && pointsAtSameHost && pointsAtPort3001) || pointsAtVercel) {
+    return defaultProdServerUrl;
   }
-  return rawUrl;
+
+  return upgradedForHttps;
 })();
 
 export const socketServerUrl = resolvedUrl;

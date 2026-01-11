@@ -199,6 +199,7 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
       <div className="w-full h-screen flex items-center justify-center p-8">
         <div className="w-full max-w-2xl text-center">
           <div className="text-2xl animate-pulse mb-6">Creating Room...</div>
+          <div className="text-sm text-slate-500 mb-4">{socketServerUrl ?? window.location.origin}</div>
           {error && (
             <div className="w-full mb-6 p-4 bg-red-900/40 border border-red-600 rounded-lg text-red-200 text-center">
               {error}
@@ -226,7 +227,7 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
   const isNastySetup = room.state === 'NL_PROMPT_SUBMIT';
   const joinBase =
     ((import.meta as any)?.env?.VITE_JOIN_URL as string | undefined) ??
-    `http://${window.location.hostname}:${window.location.port}`;
+    window.location.origin;
   const publicServerUrl =
     ((import.meta as any)?.env?.VITE_PUBLIC_SERVER_URL as string | undefined) ?? socketServerUrl;
   const joinUrl = `${joinBase}#/join?room=${room.code}${
