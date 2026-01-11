@@ -328,6 +328,7 @@ export class GameManager {
           if (room.nastyContestantIds?.includes(bot.id)) continue;
           const already = room.nastyPromptSubmissions?.some(p => p.playerId === bot.id);
           if (already) continue;
+          // IMPORTANT: Bot logic fix - ensure they submit
           const prompt = await this.generateBotPrompt('nasty_prompt');
           this.handleSubmitPrompt(room, bot.socketId, prompt);
         }
@@ -340,6 +341,7 @@ export class GameManager {
           if (!contestants.has(bot.id)) continue;
           const already = room.answers.some(a => a.playerId === bot.id);
           if (already) continue;
+          // IMPORTANT: Bot logic fix - ensure they submit
           const answer = await this.generateBotPrompt('nasty_answer', room.promptText ?? '');
           this.handleAnswer(room, bot.socketId, answer);
         }
@@ -511,12 +513,14 @@ export class GameManager {
   }
 
   private startGame(room: Room) {
-    const activePlayers = this.getActivePlayers(room);
-    if (activePlayers.length < 3) {
-      this.io.to(room.hostSocketId).emit('error', { message: 'At least 3 players required' });
-      return;
+    let activePlayers = this.getActivePlayers(room);
+    
+    // Auto-fill bots if less than 4 players
+    while (activePlayers.length < 4) {
+      this.addBot(room);
+      activePlayers = this.getActivePlayers(room);
     }
-
+    
     room.answers = [];
     room.votes = {};
     room.votedBy = {};
@@ -760,7 +764,12 @@ export class GameManager {
     const index = Number(voteIndex);
     if (!Number.isFinite(index)) return;
     if (index < 0 || index >= room.answers.length) return;
-    if (room.answers[index]?.playerId === player.id) return;
+    
+    // Prevent self-voting
+    if (room.answers[index]?.playerId === player.id) {
+        this.io.to(socketId).emit('error', { message: "You can't vote for yourself!", code: 'GAME_ERROR' });
+        return;
+    }
 
     room.votedBy[socketId] = true;
     room.votes[index] = (room.votes[index] || 0) + 1;

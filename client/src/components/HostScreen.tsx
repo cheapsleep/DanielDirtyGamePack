@@ -53,6 +53,32 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
   const [error, setError] = useState<string>('');
   const [retryKey, setRetryKey] = useState(0);
   const [shortUrl, setShortUrl] = useState<string>('');
+  
+  const roomCode = room?.code;
+  const joinBase =
+    ((import.meta as any)?.env?.VITE_JOIN_URL as string | undefined) ??
+    window.location.origin;
+  const publicServerUrl =
+    ((import.meta as any)?.env?.VITE_PUBLIC_SERVER_URL as string | undefined) ?? socketServerUrl;
+  const joinUrl = roomCode ? `${joinBase}#/join?room=${roomCode}${
+    publicServerUrl ? `&server=${encodeURIComponent(publicServerUrl)}` : ''
+  }` : '';
+
+  useEffect(() => {
+    if (shortUrl || !joinUrl) return;
+    
+    // Attempt to shorten URL
+    fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(joinUrl)}`)
+      .then(res => res.text())
+      .then(text => {
+        if (text.startsWith('http')) {
+          setShortUrl(text);
+        }
+      })
+      .catch(() => {
+        // Fallback to long URL silently
+      });
+  }, [joinUrl, shortUrl]);
 
   useEffect(() => {
     const storageKey = `host:${gameId}`;
@@ -195,6 +221,20 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
     setRetryKey(x => x + 1);
   };
 
+  const title = room
+    ? (room.gameId ?? gameId) === 'dubiously-patented' ? 'Dubiously Patented' : 'Nasty Libs'
+    : '';
+  const isPatented = room ? (room.gameId ?? gameId) === 'dubiously-patented' : false;
+  const isPromptPhase = room ? room.state === 'NL_ANSWER' || room.state === 'DP_ANSWER' : false;
+  const isVotingPhase = room ? room.state === 'NL_VOTING' || room.state === 'DP_VOTING' : false;
+  const isResultsPhase = room ? room.state === 'NL_RESULTS' || room.state === 'DP_RESULTS' : false;
+  const isNastySetup = room ? room.state === 'NL_PROMPT_SUBMIT' : false;
+  const displayUrl = shortUrl || joinUrl;
+  
+  const controllerName = room
+    ? room.players.find(p => p.id === room.controllerPlayerId)?.name ?? 'Nobody yet'
+    : '';
+
   if (!room) {
     return (
       <div className="w-full h-screen flex items-center justify-center p-8">
@@ -224,43 +264,6 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
       </div>
     );
   }
-
-  const title =
-    (room.gameId ?? gameId) === 'dubiously-patented' ? 'Dubiously Patented' : 'Nasty Libs';
-  const isPatented = (room.gameId ?? gameId) === 'dubiously-patented';
-  const isPromptPhase = room.state === 'NL_ANSWER' || room.state === 'DP_ANSWER';
-  const isVotingPhase = room.state === 'NL_VOTING' || room.state === 'DP_VOTING';
-  const isResultsPhase = room.state === 'NL_RESULTS' || room.state === 'DP_RESULTS';
-  const isNastySetup = room.state === 'NL_PROMPT_SUBMIT';
-  const joinBase =
-    ((import.meta as any)?.env?.VITE_JOIN_URL as string | undefined) ??
-    window.location.origin;
-  const publicServerUrl =
-    ((import.meta as any)?.env?.VITE_PUBLIC_SERVER_URL as string | undefined) ?? socketServerUrl;
-  const joinUrl = `${joinBase}#/join?room=${room.code}${
-    publicServerUrl ? `&server=${encodeURIComponent(publicServerUrl)}` : ''
-  }`;
-
-  useEffect(() => {
-    if (shortUrl || !joinUrl) return;
-    
-    // Attempt to shorten URL
-    fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(joinUrl)}`)
-      .then(res => res.text())
-      .then(text => {
-        if (text.startsWith('http')) {
-          setShortUrl(text);
-        }
-      })
-      .catch(() => {
-        // Fallback to long URL silently
-      });
-  }, [joinUrl, shortUrl]);
-
-  const displayUrl = shortUrl || joinUrl;
-  
-  const controllerName =
-    room.players.find(p => p.id === room.controllerPlayerId)?.name ?? 'Nobody yet';
 
   return (
     <div className="w-full h-screen flex flex-col p-8">

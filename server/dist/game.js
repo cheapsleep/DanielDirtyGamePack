@@ -288,6 +288,7 @@ class GameManager {
                         const already = (_b = room.nastyPromptSubmissions) === null || _b === void 0 ? void 0 : _b.some(p => p.playerId === bot.id);
                         if (already)
                             continue;
+                        // IMPORTANT: Bot logic fix - ensure they submit
                         const prompt = yield this.generateBotPrompt('nasty_prompt');
                         this.handleSubmitPrompt(room, bot.socketId, prompt);
                     }
@@ -302,6 +303,7 @@ class GameManager {
                         const already = room.answers.some(a => a.playerId === bot.id);
                         if (already)
                             continue;
+                        // IMPORTANT: Bot logic fix - ensure they submit
                         const answer = yield this.generateBotPrompt('nasty_answer', (_d = room.promptText) !== null && _d !== void 0 ? _d : '');
                         this.handleAnswer(room, bot.socketId, answer);
                     }
@@ -476,10 +478,11 @@ class GameManager {
         });
     }
     startGame(room) {
-        const activePlayers = this.getActivePlayers(room);
-        if (activePlayers.length < 3) {
-            this.io.to(room.hostSocketId).emit('error', { message: 'At least 3 players required' });
-            return;
+        let activePlayers = this.getActivePlayers(room);
+        // Auto-fill bots if less than 4 players
+        while (activePlayers.length < 4) {
+            this.addBot(room);
+            activePlayers = this.getActivePlayers(room);
         }
         room.answers = [];
         room.votes = {};
@@ -720,8 +723,11 @@ class GameManager {
             return;
         if (index < 0 || index >= room.answers.length)
             return;
-        if (((_b = room.answers[index]) === null || _b === void 0 ? void 0 : _b.playerId) === player.id)
+        // Prevent self-voting
+        if (((_b = room.answers[index]) === null || _b === void 0 ? void 0 : _b.playerId) === player.id) {
+            this.io.to(socketId).emit('error', { message: "You can't vote for yourself!", code: 'GAME_ERROR' });
             return;
+        }
         room.votedBy[socketId] = true;
         room.votes[index] = (room.votes[index] || 0) + 1;
         const activePlayers = this.getActivePlayers(room);

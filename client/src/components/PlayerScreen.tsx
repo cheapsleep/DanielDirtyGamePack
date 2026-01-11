@@ -102,6 +102,11 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
     });
 
     socket.on('error', (data) => {
+        if (data?.code === 'GAME_ERROR') {
+          setSubmitted(false);
+          alert(data.message); // Simple alert for now, or use a toast state
+          return;
+        }
         setError(data.message);
         setJoined(false);
     });
