@@ -51,6 +51,7 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
   const [roundResults, setRoundResults] = useState<any[]>([]);
   const [timeLeft, setTimeLeft] = useState<number>(0);
   const [error, setError] = useState<string>('');
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
     const storageKey = `host:${gameId}`;
@@ -153,7 +154,7 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
       socket.off('game_over');
       socket.off('error');
     };
-  }, [gameId]);
+  }, [gameId, retryKey]);
 
   useEffect(() => {
     if (timeLeft <= 0) return;
@@ -169,7 +170,40 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
     onBack();
   };
 
-  if (!room) return <div className="text-2xl animate-pulse">Creating Room...</div>;
+  const handleRetry = () => {
+    try {
+      sessionStorage.removeItem(`host:${gameId}`);
+    } catch {
+      // ignore
+    }
+    setRoom(null);
+    setError('');
+    if (!socket.connected) socket.connect();
+    setRetryKey(x => x + 1);
+  };
+
+  if (!room) {
+    return (
+      <div className="w-full h-screen flex items-center justify-center p-8">
+        <div className="w-full max-w-2xl text-center">
+          <div className="text-2xl animate-pulse mb-6">Creating Room...</div>
+          {error && (
+            <div className="w-full mb-6 p-4 bg-red-900/40 border border-red-600 rounded-lg text-red-200 text-center">
+              {error}
+            </div>
+          )}
+          <div className="flex justify-center gap-3">
+            <WoodenButton variant="wood" onClick={handleRetry} className="px-6 py-2 text-lg">
+              RETRY
+            </WoodenButton>
+            <WoodenButton variant="wood" onClick={onBack} className="px-6 py-2 text-lg">
+              BACK
+            </WoodenButton>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const title =
     (room.gameId ?? gameId) === 'dubiously-patented' ? 'Dubiously Patented' : 'Nasty Libs';
