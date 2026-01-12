@@ -25,9 +25,13 @@ export default function GameLibrary({ onSelectGame }: GameLibraryProps) {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white p-8 flex flex-col">
+    <div className="min-h-screen text-white p-8 flex flex-col prehistoric-bg">
       <div className="flex justify-between items-center mb-12">
-        <h1 className="text-4xl font-bold text-yellow-500 tracking-widest uppercase drop-shadow-lg">
+        <h1 className="text-5xl font-extrabold prehistoric-title tracking-widest uppercase drop-shadow-lg flex items-center gap-4">
+          <svg width="56" height="40" viewBox="0 0 56 40" fill="none" xmlns="http://www.w3.org/2000/svg" className="-ml-2">
+            <ellipse cx="14" cy="22" rx="12" ry="8" fill="#8b5e3b" />
+            <ellipse cx="34" cy="18" rx="14" ry="9" fill="#6b4a2a" />
+          </svg>
           Game Library
         </h1>
         <div className="flex gap-4">
@@ -37,20 +41,22 @@ export default function GameLibrary({ onSelectGame }: GameLibraryProps) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-7xl mx-auto w-full">
         {games.map((game) => (
-          <motion.div
+            <motion.div
             key={game.id}
             whileHover={{ scale: 1.02, y: -5 }}
-            className="bg-slate-800 rounded-xl overflow-hidden shadow-2xl border-4 border-slate-700 flex flex-col"
+            className="stone-card rounded-xl overflow-hidden shadow-2xl flex flex-col"
           >
-            <div className={`h-48 ${game.color} flex items-center justify-center p-4 relative overflow-hidden`}>
-                <div className="absolute inset-0 bg-black opacity-20"></div>
-                {game.logo ? (
-                     <img src={game.logo} alt={game.title} className="max-h-full max-w-full relative z-10 transform -rotate-6 drop-shadow-lg" />
-                ) : (
-                    <h2 className="text-4xl font-black text-white relative z-10 text-center transform -rotate-6">
-                        {game.title}
-                    </h2>
-                )}
+            <div className={`h-48 ${game.color} flex items-center justify-center p-4 relative overflow-hidden`}> 
+              <div className="absolute inset-0 bg-black opacity-20"></div>
+              <div className="card-rock rock-top-left" aria-hidden></div>
+              <div className="card-rock rock-bottom-right" aria-hidden></div>
+              {game.logo ? (
+                 <img src={game.logo} alt={game.title} className="max-h-full max-w-full relative z-10 transform -rotate-6 drop-shadow-2xl" />
+              ) : (
+                <h2 className="text-4xl font-black text-white relative z-10 text-center transform -rotate-6">
+                  {game.title}
+                </h2>
+              )}
             </div>
             <div className="p-6 flex-1 flex flex-col justify-between">
               <div>
