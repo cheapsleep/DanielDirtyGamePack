@@ -9,7 +9,12 @@
   font-style: normal;
 }
 
-body {
-  font-family: 'Thertole', 'Campfire', 'Carter One', system-ui, sans-serif;
-  @apply bg-slate-900 text-white;
+@layer base {
+  * {
+    font-family: 'Thertole', system-ui, sans-serif;
+  }
+
+  body {
+    @apply bg-slate-900 text-white;
+  }
 }
