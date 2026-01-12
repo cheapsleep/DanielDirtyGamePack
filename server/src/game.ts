@@ -797,10 +797,12 @@ export class GameManager {
     
     this.scheduleBotRun(room);
     
+    // Capture the presenter at the time investing starts to avoid races
+    const investingPresenter = room.currentPresenterId;
     setTimeout(() => {
-        if (room.state === 'DP_INVESTING' && room.currentPresenterId === room.currentPresenterId) {
-            this.startPresentation(room);
-        }
+      if (room.state === 'DP_INVESTING' && room.currentPresenterId === investingPresenter) {
+        this.startPresentation(room);
+      }
     }, 30000);
   }
 
@@ -834,12 +836,8 @@ export class GameManager {
     const activePlayers = this.getActivePlayers(room);
     const potentialInvestors = activePlayers.filter(p => p.id !== room.currentPresenterId).length;
     if (Object.keys(room.currentInvestments).length >= potentialInvestors) {
-        // All done, move to next presentation early?
-        // Wait for timer or just go? 
-        // Let's wait for timer to give people time to think/change? No, usually speed is good.
-        // But I set a timeout in startInvesting. 
-        // I should probably clear that timeout or just let it race. 
-        // Simpler: Just wait for timer.
+      // All investors have submitted — advance immediately to the next presentation
+      this.startPresentation(room);
     }
   }
 
