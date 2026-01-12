@@ -3,9 +3,10 @@ import { socket } from './socket';
 import HostScreen from './components/HostScreen';
 import PlayerScreen from './components/PlayerScreen';
 import SplashScreen from './components/SplashScreen';
+import TitleScreen from './components/TitleScreen';
 import GameLibrary from './components/GameLibrary';
 
-type View = 'SPLASH' | 'LIBRARY' | 'HOST' | 'PLAYER';
+type View = 'SPLASH' | 'TITLE' | 'LIBRARY' | 'HOST' | 'PLAYER';
 
 function App() {
   const [isJoin, setIsJoin] = useState<boolean>(() => window.location.hash.startsWith('#/join'));
@@ -39,6 +40,10 @@ function App() {
   }, []);
 
   const handleSplashComplete = () => {
+    setView('TITLE');
+  };
+
+  const handleTitleContinue = () => {
     setView('LIBRARY');
   };
 
@@ -68,6 +73,10 @@ function App() {
     <div className="min-h-screen bg-slate-900 overflow-hidden">
       {view === 'SPLASH' && (
         <SplashScreen onComplete={handleSplashComplete} />
+      )}
+
+      {view === 'TITLE' && (
+        <TitleScreen onContinue={handleTitleContinue} />
       )}
 
       {view === 'LIBRARY' && (

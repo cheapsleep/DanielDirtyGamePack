@@ -23,7 +23,8 @@ export default function SplashScreen({ onComplete }: SplashScreenProps) {
         transition={{ duration: 1, type: "spring", bounce: 0.5 }}
         className="w-full max-w-2xl p-8"
       >
-        <img 
+        <motion.img 
+          layoutId="app-logo"
           src="/assets/TITLE_LOGO.svg" 
           alt="DanielBox Party Games" 
           className="w-full h-auto drop-shadow-[0_0_30px_rgba(255,255,255,0.2)]"
