@@ -281,9 +281,12 @@ export class GameManager {
     if (room.state !== 'LOBBY') return;
     const botCount = room.players.filter(p => p.isBot).length;
     const id = uuidv4();
+    const adj = ['Turbo','Mega','Silly','Quantum','Pocket','Mystic','Zippy','Wacky','Glitchy','Jolly'];
+    const noun = ['Toaster','Gizmo','Widget','Pal','Duck','Monkey','Gadget','Noodle','Wombat','Sprout'];
+    const name = `${this.pick(adj)} ${this.pick(noun)} (CPU)`;
     const bot: Player = {
       id,
-      name: `CPU ${botCount + 1}`,
+      name,
       socketId: `bot:${id}`,
       score: 0,
       isConnected: true,
@@ -406,10 +409,12 @@ export class GameManager {
         
         const problem = room.dpSelectedByPlayer?.[bot.id] ?? 'A problem.';
         const title = await this.generateBotPrompt('dp_answer', problem);
-        
-        // Simple 1x1 transparent PNG base64
-        const drawing = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
-        
+        // Generate a simple SVG placeholder with bot name so CPU drawings are visible
+        const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='600' height='400'><rect width='100%' height='100%' fill='%23fff8e1'/><text x='50%' y='45%' dominant-baseline='middle' text-anchor='middle' font-size='28' fill='%23000'>${this.escapeXml(
+          title.slice(0, 40)
+        )}</text><text x='50%' y='60%' dominant-baseline='middle' text-anchor='middle' font-size='20' fill='%23666'>by ${this.escapeXml(bot.name)}</text></svg>`;
+        const drawing = `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
+
         this.handleSubmitDrawing(room, bot.socketId, drawing, title);
       }
     }
@@ -605,9 +610,22 @@ export class GameManager {
     const activePlayers = this.getActivePlayers(room);
     const audienceCount = Math.max(0, activePlayers.length - 2);
     if (room.nastyPromptSubmissions.length < audienceCount) return;
+    // Mix audience-submitted prompts with default prompts, then select randomly
+    const defaults = [
+      'The worst thing to say at a wedding is ____.',
+      'My new job title is officially “____.”',
+      'I knew it was a bad idea when the label said “____.”',
+      'Tonight’s dinner: ____ with a side of ____.',
+      'The first rule of my secret club is ____.'
+    ];
 
-    const selected = room.nastyPromptSubmissions[Math.floor(Math.random() * room.nastyPromptSubmissions.length)];
-    room.promptText = selected.prompt;
+    const pool = [
+      ...((room.nastyPromptSubmissions ?? []).map(p => p.prompt)),
+      ...defaults
+    ];
+
+    const selectedPrompt = pool[Math.floor(Math.random() * pool.length)];
+    room.promptText = selectedPrompt;
     room.state = 'NL_ANSWER';
     room.answers = [];
     room.votes = {};
@@ -999,7 +1017,19 @@ export class GameManager {
       currentTitle: room.currentPresenterId && room.answers ? room.answers.find(a => a.playerId === room.currentPresenterId)?.answer : undefined,
       currentProblem: room.currentPresenterId && room.dpSelectedByPlayer ? room.dpSelectedByPlayer[room.currentPresenterId] : undefined
       ,
+      promptText: room.promptText
+      ,
       currentInvestments: room.currentInvestments ?? {}
     };
+  }
+
+  // Escape XML to safely embed text in generated SVG
+  private escapeXml(input: string) {
+    return String(input)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
   }
 }

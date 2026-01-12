@@ -42,6 +42,7 @@ interface RoomState {
   currentDrawing?: string;
   currentTitle?: string;
   currentProblem?: string;
+  promptText?: string;
 }
 
 import WoodenButton from './WoodenButton';
@@ -496,6 +497,12 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
 
         {isVotingPhase && (
             <div className="w-full max-w-4xl relative">
+                {room?.promptText && (
+                  <div className="text-center mb-6">
+                    <div className="text-sm font-black tracking-widest text-slate-400">PROMPT</div>
+                    <h2 className="text-2xl font-bold mt-2">{room.promptText}</h2>
+                  </div>
+                )}
                 <div className="absolute -top-16 right-0 p-4 text-4xl font-black text-white bg-slate-800 rounded-full w-20 h-20 flex items-center justify-center border-4 border-blue-500">
                     {timeLeft}
                 </div>

@@ -124,6 +124,7 @@ interface RoomPublicState {
   contestants?: { id: string; name: string }[];
   controllerPlayerId?: string;
   players?: { id: string; name: string; isConnected: boolean; isBot?: boolean; score: number }[];
+  promptText?: string;
 }
 
 export default function PlayerScreen({ onBack }: PlayerScreenProps) {
@@ -695,20 +696,25 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
                     </div>
                 ) : (
                     <>
-                        <h2 className="text-xl font-bold mb-6 text-center">
-                          {gameId === 'dubiously-patented' ? 'Vote for the best invention' : 'Vote for the best answer'}
+                      <div className="text-center mb-4">
+                        <h2 className="text-xl font-bold">
+                        {gameId === 'dubiously-patented' ? 'Vote for the best invention' : 'Vote for the best answer'}
                         </h2>
-                        <div className="grid grid-cols-1 gap-3">
-                            {votingOptions.map((opt, idx) => (
-                                <button
-                                    key={idx}
-                                    onClick={() => handleVote(idx)}
-                                    className="p-4 bg-slate-800 hover:bg-slate-700 rounded-xl text-lg font-bold text-left"
-                                >
-                                    {opt}
-                                </button>
-                            ))}
-                        </div>
+                        {room?.promptText && (
+                        <div className="text-slate-400 mt-2">Prompt: {room.promptText}</div>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-1 gap-3">
+                        {votingOptions.map((opt, idx) => (
+                          <button
+                            key={idx}
+                            onClick={() => handleVote(idx)}
+                            className="p-4 bg-slate-800 hover:bg-slate-700 rounded-xl text-lg font-bold text-left"
+                          >
+                            {opt}
+                          </button>
+                        ))}
+                      </div>
                     </>
                 )}
             </div>
