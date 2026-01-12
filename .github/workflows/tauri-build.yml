@@ -64,7 +64,11 @@ jobs:
           sudo chmod +x /usr/local/bin/linuxdeploy /usr/local/bin/linuxdeploy-plugin-appimage
 
       - name: Build Tauri bundle
-        run: npx tauri build
+        env:
+          LINUXDEPLOY: /usr/local/bin/linuxdeploy
+          LINUXDEPLOY_PLUGIN: /usr/local/bin/linuxdeploy-plugin-appimage
+          RUST_BACKTRACE: 1
+        run: npx tauri build --verbose
         working-directory: client
 
       - name: Upload Linux artifacts
