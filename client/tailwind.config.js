@@ -5,12 +5,7 @@ export default {
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
-    extend: {
-      fontFamily: {
-        'campfire': ['Thertole', 'Campfire', 'sans-serif'],
-        'thertole': ['Thertole', 'sans-serif'],
-      },
-    },
+    extend: {},
   },
   plugins: [],
 }
