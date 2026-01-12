@@ -1,8 +1,11 @@
 # Ignore client build outputs and dependencies
-/client/target/
-/client/src-tauri/target/
-/client/node_modules/
-/client/build-artifacts/
+ /client/target/
+ /client/src-tauri/target/
+ /client/node_modules/
+ /client/build-artifacts/
+ # root build outputs
+ /build-artifacts/
+ /client/dist/
 
 # Ignore other common build artifacts
 /target/
