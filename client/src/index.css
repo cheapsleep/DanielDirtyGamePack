@@ -1,5 +1,5 @@
 @font-face {
-  font-family: 'BedrockBT';
+  font-family: 'Bedrock BT Semi Condensed';
   src: url('/Bedrock-BT.ttf') format('truetype');
   font-weight: 400;
   font-style: normal;
@@ -12,7 +12,7 @@
 
 @layer base {
   * {
-    font-family: 'BedrockBT' !important;
+    font-family: 'Bedrock BT Semi Condensed' !important;
   }
 
   body {
