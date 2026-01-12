@@ -332,6 +332,12 @@ export class GameManager {
     });
   }
 
+  // Helper to add human-like random delay (1-5 seconds)
+  private async humanDelay(minMs = 1000, maxMs = 5000): Promise<void> {
+    const delay = minMs + Math.random() * (maxMs - minMs);
+    return new Promise(resolve => setTimeout(resolve, delay));
+  }
+
   private async runBots(room: Room) {
     const bots = this.getActivePlayers(room).filter(p => p.isBot);
     if (bots.length === 0) return;
@@ -343,7 +349,9 @@ export class GameManager {
           if (room.nastyContestantIds?.includes(bot.id)) continue;
           const already = room.nastyPromptSubmissions?.some(p => p.playerId === bot.id);
           if (already) continue;
-          // IMPORTANT: Bot logic fix - ensure they submit
+          // Human-like delay before submitting
+          await this.humanDelay(2000, 8000);
+          if (room.state !== 'NL_PROMPT_SUBMIT') break;
           const prompt = await this.generateBotPrompt('nasty_prompt');
           this.handleSubmitPrompt(room, bot.socketId, prompt);
         }
@@ -356,7 +364,9 @@ export class GameManager {
           if (!contestants.has(bot.id)) continue;
           const already = room.answers.some(a => a.playerId === bot.id);
           if (already) continue;
-          // IMPORTANT: Bot logic fix - ensure they submit
+          // Human-like delay - "thinking" of a funny answer
+          await this.humanDelay(3000, 12000);
+          if (room.state !== 'NL_ANSWER') break;
           const answer = await this.generateBotPrompt('nasty_answer', room.promptText ?? '');
           this.handleAnswer(room, bot.socketId, answer);
         }
@@ -367,6 +377,9 @@ export class GameManager {
           if (room.state !== 'NL_VOTING') break;
           const already = room.votedBy?.[bot.socketId];
           if (already) continue;
+          // Human-like delay - reading options
+          await this.humanDelay(2000, 6000);
+          if (room.state !== 'NL_VOTING') break;
           const ownIndex = room.answers.findIndex(a => a.playerId === bot.id);
           const options = room.answers.map((_, idx) => idx).filter(i => i !== ownIndex);
           if (options.length === 0) continue;
@@ -383,6 +396,9 @@ export class GameManager {
         if (room.state !== 'DP_PROBLEM_SUBMIT') break;
         const already = Boolean(room.dpProblemsByPlayer?.[bot.id]);
         if (already) continue;
+        // Human-like delay - thinking of problems
+        await this.humanDelay(3000, 10000);
+        if (room.state !== 'DP_PROBLEM_SUBMIT') break;
         const p1 = await this.generateBotPrompt('dp_problem');
         const p2 = await this.generateBotPrompt('dp_problem');
         const p3 = await this.generateBotPrompt('dp_problem');
@@ -395,6 +411,9 @@ export class GameManager {
         if (room.state !== 'DP_PICK') break;
         const already = Boolean(room.dpSelectedByPlayer?.[bot.id]);
         if (already) continue;
+        // Human-like delay - reading choices
+        await this.humanDelay(2000, 5000);
+        if (room.state !== 'DP_PICK') break;
         const choices = room.dpChoicesByPlayer?.[bot.id] ?? [];
         const pick = choices[Math.floor(Math.random() * choices.length)];
         if (!pick) continue;
@@ -407,6 +426,10 @@ export class GameManager {
         if (room.state !== 'DP_DRAWING') break;
         const already = room.dpDrawings?.[bot.id];
         if (already) continue;
+        
+        // Human-like delay - "drawing" takes time
+        await this.humanDelay(5000, 15000);
+        if (room.state !== 'DP_DRAWING') break;
         
         const problem = room.dpSelectedByPlayer?.[bot.id] ?? 'A problem.';
         const title = await this.generateBotPrompt('dp_answer', problem);
@@ -436,9 +459,15 @@ export class GameManager {
         const already = room.currentInvestments?.[bot.id];
         if (already !== undefined) continue;
         
-        // Invest random amount (0 to current score, weighted towards middle)
+        // Human-like delay - "considering" the investment
+        await this.humanDelay(2000, 8000);
+        if (room.state !== 'DP_INVESTING') break;
+        
+        // Smarter investing - invest more on earlier presentations, less on later ones
+        // Also add some randomness to feel more human
         const max = bot.score;
-        const amount = Math.floor(Math.random() * max * 0.5); // Invest up to 50%
+        const basePercent = 0.1 + Math.random() * 0.4; // 10-50% base
+        const amount = Math.floor(max * basePercent);
         this.handleInvest(room, bot.socketId, amount);
       }
     }
@@ -773,6 +802,10 @@ export class GameManager {
     room.dpDrawings ??= {};
     if (room.dpDrawings[player.id]) return; // Already submitted
 
+    // Debug logging
+    console.log(`[DP] Storing drawing for ${player.name} (${player.id}), isBot: ${player.isBot}`);
+    console.log(`[DP] Drawing length: ${drawing?.length ?? 0}, starts with: ${drawing?.substring(0, 50)}`);
+    
     room.dpDrawings[player.id] = drawing || ''; // Base64 string
     
     // Store title as "answer" for consistency or separate field
@@ -799,10 +832,16 @@ export class GameManager {
     room.state = 'DP_PRESENTING';
     room.currentInvestments = {};
 
+    // Debug logging for presentation
+    const presentationDrawing = room.dpDrawings ? room.dpDrawings[nextId || ''] : undefined;
+    const presenter = room.players.find(p => p.id === nextId);
+    console.log(`[DP] Starting presentation for ${presenter?.name} (${nextId}), isBot: ${presenter?.isBot}`);
+    console.log(`[DP] Drawing available: ${!!presentationDrawing}, length: ${presentationDrawing?.length ?? 0}`);
+
     this.io.to(room.code).emit('start_presentation', {
       presenterId: nextId,
       timeLimit: 60,
-      drawing: room.dpDrawings ? room.dpDrawings[nextId || ''] : undefined,
+      drawing: presentationDrawing,
       answer: room.answers ? room.answers.find(a => a.playerId === nextId)?.answer : undefined,
       prompt: room.dpSelectedByPlayer ? room.dpSelectedByPlayer[nextId || ''] : undefined
     });

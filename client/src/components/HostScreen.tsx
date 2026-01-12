@@ -435,7 +435,21 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
                 </div>
                 
                 <div className="bg-white p-4 rounded-xl shadow-2xl mb-6">
-                    <img src={presentationData.drawing} alt="Invention" className="max-h-[50vh] object-contain" />
+                    {presentationData.drawing ? (
+                      <img 
+                        src={presentationData.drawing} 
+                        alt="Invention" 
+                        className="max-h-[50vh] object-contain"
+                        onError={(e) => {
+                          console.error('Image failed to load:', presentationData.drawing?.substring(0, 100));
+                          (e.target as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
+                    ) : (
+                      <div className="w-96 h-64 bg-slate-200 flex items-center justify-center text-slate-500">
+                        No drawing available
+                      </div>
+                    )}
                 </div>
 
                 <div className="bg-slate-800 p-6 rounded-xl max-w-3xl w-full text-center border-2 border-slate-600">
@@ -455,7 +469,21 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
                 <div className="grid grid-cols-2 gap-12 items-center w-full max-w-5xl">
                     <div className="text-center">
                         <div className="bg-white p-2 rounded-xl inline-block mb-4 opacity-50">
-                            <img src={presentationData.drawing} alt="Invention" className="h-48 object-contain" />
+                            {presentationData.drawing ? (
+                              <img 
+                                src={presentationData.drawing} 
+                                alt="Invention" 
+                                className="h-48 object-contain"
+                                onError={(e) => {
+                                  console.error('Investing image failed:', presentationData.drawing?.substring(0, 100));
+                                  (e.target as HTMLImageElement).style.display = 'none';
+                                }}
+                              />
+                            ) : (
+                              <div className="w-48 h-48 bg-slate-200 flex items-center justify-center text-slate-500">
+                                No image
+                              </div>
+                            )}
                         </div>
                         <h2 className="text-3xl font-bold">{presentationData.title}</h2>
                     </div>

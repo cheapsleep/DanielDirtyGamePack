@@ -737,7 +737,30 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
         {gameState === 'END' && (
             <div className="text-center">
                 <h2 className="text-3xl font-bold mb-4">GAME OVER</h2>
-                <WoodenButton type="button" variant="wood" onClick={onBack} className="px-6 py-3">
+                <WoodenButton type="button" variant="wood" onClick={() => {
+                  // Reset state and go back to join screen
+                  setJoined(false);
+                  setRoom(null);
+                  setError('');
+                  setSubmitted(false);
+                  setPrompt('');
+                  setVotingOptions([]);
+                  setAnswerDraft('');
+                  setPromptDraft('');
+                  setProblemsDraft(['', '', '']);
+                  setDpChoices([]);
+                  setDpSelected('');
+                  setDrawingDraft('');
+                  setInvestmentAmount('');
+                  // Clear stored playerId for this room
+                  if (roomCode) {
+                    try {
+                      localStorage.removeItem(`playerId:${roomCode.toUpperCase()}`);
+                    } catch {
+                      // ignore
+                    }
+                  }
+                }} className="px-6 py-3">
                   BACK
                 </WoodenButton>
             </div>
