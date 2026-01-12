@@ -3,15 +3,15 @@
 @tailwind utilities;
 
 @font-face {
-  font-family: 'Thertole';
-  src: url('./assets/fonts/Thertole-PersonalUse.otf') format('opentype');
+  font-family: 'Bedrock BT';
+  src: url('./assets/fonts/Bedrock-BT.ttf') format('truetype');
   font-weight: normal;
   font-style: normal;
 }
 
 @layer base {
   * {
-    font-family: 'Thertole', system-ui, sans-serif;
+    font-family: 'Bedrock BT', system-ui, sans-serif;
   }
 
   body {
