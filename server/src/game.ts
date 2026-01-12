@@ -767,8 +767,11 @@ export class GameManager {
     room.currentInvestments = {};
 
     this.io.to(room.code).emit('start_presentation', {
-        presenterId: nextId,
-        timeLimit: 60
+      presenterId: nextId,
+      timeLimit: 60,
+      drawing: room.dpDrawings ? room.dpDrawings[nextId || ''] : undefined,
+      answer: room.answers ? room.answers.find(a => a.playerId === nextId)?.answer : undefined,
+      prompt: room.dpSelectedByPlayer ? room.dpSelectedByPlayer[nextId || ''] : undefined
     });
     this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
     
@@ -904,12 +907,13 @@ export class GameManager {
   }
 
   private showResults(room: Room) {
-    if (room.state !== 'NL_VOTING' && room.state !== 'DP_PRESENTING') return; // DP uses end game after presentations
-    
+    // For Dubiously Patented, end the game after presentations/investing
     if (room.gameId === 'dubiously-patented') {
-        this.endGame(room);
-        return;
+      this.endGame(room);
+      return;
     }
+
+    if (room.state !== 'NL_VOTING' && room.state !== 'DP_PRESENTING') return;
 
     room.state = 'NL_RESULTS';
 
@@ -996,6 +1000,8 @@ export class GameManager {
       currentDrawing: room.currentPresenterId && room.dpDrawings ? room.dpDrawings[room.currentPresenterId] : undefined,
       currentTitle: room.currentPresenterId && room.answers ? room.answers.find(a => a.playerId === room.currentPresenterId)?.answer : undefined,
       currentProblem: room.currentPresenterId && room.dpSelectedByPlayer ? room.dpSelectedByPlayer[room.currentPresenterId] : undefined
+      ,
+      currentInvestments: room.currentInvestments ?? {}
     };
   }
 }

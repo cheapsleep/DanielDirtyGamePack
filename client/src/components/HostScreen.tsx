@@ -152,13 +152,9 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
     });
 
     socket.on('start_presentation', (data) => {
-        setPresentationData({
-            presenterId: data.presenterId,
-            drawing: data.drawing,
-            title: data.answer,
-            prompt: data.prompt
-        });
-        setTimeLeft(data.timeLimit);
+      // Server will emit room_update with the authoritative drawing/title/prompt.
+      // Only set the timer here to avoid overwriting presentationData before room_update arrives.
+      setTimeLeft(data.timeLimit);
     });
 
     socket.on('start_investing', (data) => {
