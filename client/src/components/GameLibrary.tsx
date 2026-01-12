@@ -27,7 +27,7 @@ export default function GameLibrary({ onSelectGame }: GameLibraryProps) {
       title: 'AUTISM ASSESSMENT',
       description: 'A 20-question quiz to determine who in your group is the most neurotypical. The least autistic player wins a certificate!',
       color: 'bg-blue-600',
-      logo: null,
+      logo: '/assets/Autism_Assessment_Logo.png',
     },
   ];
 
