@@ -1,0 +1,11 @@
+# Ignore client build outputs and dependencies
+/client/target/
+/client/src-tauri/target/
+/client/node_modules/
+/client/build-artifacts/
+
+# Ignore other common build artifacts
+/target/
+/build/
+*.local
+.DS_Store
