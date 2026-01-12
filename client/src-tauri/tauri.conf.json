@@ -1,6 +1,6 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "Daniels Dirty Game Pack",
+  "productName": "Daniel's Dirty Game Pack",
   "version": "0.1.0",
   "identifier": "com.danielbox.gamepack",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Daniels Dirty Game Pack",
+        "title": "Daniel's Dirty Game Pack",
         "width": 800,
         "height": 600,
         "resizable": true,

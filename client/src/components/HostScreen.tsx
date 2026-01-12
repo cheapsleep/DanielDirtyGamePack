@@ -366,7 +366,7 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
                   key={p.id}
                   className={`p-4 rounded-lg text-xl font-bold ${p.isConnected ? 'bg-indigo-600' : 'bg-red-900 opacity-50'}`}
                 >
-                  {p.name}{p.isBot ? ' (CPU)' : ''}
+                  {p.name}
                 </div>
               ))}
               {room.players.length === 0 && <p className="col-span-4 text-slate-500">No players yet</p>}

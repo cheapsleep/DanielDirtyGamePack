@@ -1,5 +1,6 @@
 import { Server, Socket } from 'socket.io';
 import { v4 as uuidv4 } from 'uuid';
+import { nastyPrompts, nastyAnswers } from './nastyPrompts';
 
 type GameId = 'nasty-libs' | 'dubiously-patented';
 
@@ -409,10 +410,18 @@ export class GameManager {
         
         const problem = room.dpSelectedByPlayer?.[bot.id] ?? 'A problem.';
         const title = await this.generateBotPrompt('dp_answer', problem);
-        // Generate a simple SVG placeholder with bot name so CPU drawings are visible
-        const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='600' height='400'><rect width='100%' height='100%' fill='%23fff8e1'/><text x='50%' y='45%' dominant-baseline='middle' text-anchor='middle' font-size='28' fill='%23000'>${this.escapeXml(
-          title.slice(0, 40)
-        )}</text><text x='50%' y='60%' dominant-baseline='middle' text-anchor='middle' font-size='20' fill='%23666'>by ${this.escapeXml(bot.name)}</text></svg>`;
+        // Generate a visible SVG placeholder with shapes and bot info
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400">
+          <rect width="100%" height="100%" fill="#fff8e1"/>
+          <rect x="50" y="80" width="500" height="200" fill="#e0e0e0" stroke="#333" stroke-width="3" rx="20"/>
+          <circle cx="150" cy="180" r="50" fill="#4CAF50"/>
+          <circle cx="300" cy="180" r="50" fill="#2196F3"/>
+          <circle cx="450" cy="180" r="50" fill="#FF9800"/>
+          <line x1="150" y1="180" x2="300" y2="180" stroke="#333" stroke-width="4"/>
+          <line x1="300" y1="180" x2="450" y2="180" stroke="#333" stroke-width="4"/>
+          <text x="300" y="320" text-anchor="middle" font-size="22" font-weight="bold" fill="#333">${this.escapeXml(title.slice(0, 45))}</text>
+          <text x="300" y="360" text-anchor="middle" font-size="16" fill="#666">by ${this.escapeXml(bot.name)}</text>
+        </svg>`;
         const drawing = `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
 
         this.handleSubmitDrawing(room, bot.socketId, drawing, title);
@@ -440,38 +449,52 @@ export class GameManager {
     if (fromApi) return fromApi;
 
     if (kind === 'nasty_prompt') {
-      const templates = [
-        'The worst thing to say at a wedding is ____.',
-        'My new job title is officially “____.”',
-        'I knew it was a bad idea when the label said “____.”',
-        'Tonight’s dinner: ____ with a side of ____.',
-        'The first rule of my secret club is ____.'
-      ];
-      return templates[Math.floor(Math.random() * templates.length)];
+      // Use the imported nasty prompts list
+      return this.pick(nastyPrompts);
     }
-
     if (kind === 'dp_problem') {
       const templates = [
-        'I can’t stop losing my keys.',
-        'My group chats never stop buzzing.',
-        'My socks keep disappearing in the laundry.',
-        'I always spill drinks at the worst time.',
-        'I can’t remember why I walked into a room.'
+        "I can't stop losing my keys.",
+        "My group chats never stop buzzing.",
+        "My socks keep disappearing in the laundry.",
+        "I always spill drinks at the worst time.",
+        "I can't remember why I walked into a room.",
+        "My neighbor plays loud music at 3am.",
+        "I always forget people's names immediately.",
+        "My phone battery dies at the worst moments.",
+        "I can never find matching Tupperware lids.",
+        "I keep getting spam calls during meetings."
       ];
-      return templates[Math.floor(Math.random() * templates.length)];
+      return this.pick(templates);
     }
 
     if (kind === 'nasty_answer') {
-      const templates = ['a tactical nap', 'too much confidence', 'my evil twin', 'free samples', 'the vibe check'];
-      return templates[Math.floor(Math.random() * templates.length)];
+      // Use the imported nasty answers list
+      return this.pick(nastyAnswers);
     }
 
-    const templates = [
-      `Introducing the ${this.pick(['Auto', 'Mega', 'Ultra', 'Pocket', 'Turbo'])}${this.pick(['Buddy', 'Gizmo', 'Helper', 'Pal', 'Wizard'])}: it fixes it instantly, probably.`,
-      `Behold my invention: a wearable solution that handles it while you pretend you meant to.`,
-      `My invention solves it by politely asking it to stop. Somehow it works.`
-    ];
-    return templates[Math.floor(Math.random() * templates.length)];
+    // dp_answer - invention titles for Dubiously Patented
+    const prefix = this.pick(['The', 'My', 'Introducing:', 'Behold!', 'Patent Pending:', '']);
+    const adj = this.pick(['Turbo', 'Mega', 'Ultra', 'Quantum', 'Pocket', 'Self-Aware', 'Artisanal', 'Blockchain', 'AI-Powered', 'Organic', 'Military-Grade', 'Sentient', 'Tactical', 'Moisturized', 'Forbidden']);
+    const noun = this.pick(['Buddy', 'Gizmo', '3000', 'Pro Max', 'Deluxe', 'Helper', 'Solution', '-Matic', 'Blaster', 'Eliminator', 'Wizard', 'Master', 'Destroyer']);
+    const core = this.pick([
+      `${adj} Problem ${noun}`,
+      `${adj} ${noun}`,
+      `${adj} Life ${noun}`,
+      `${this.pick(['Auto', 'Robo', 'Smart', 'E-'])}${this.pick(['Fix', 'Solve', 'Helper', 'Buddy'])} ${noun}`,
+      `The "${context?.slice(0, 20) ?? 'Problem'}" ${noun}`
+    ]);
+    const suffix = this.pick([
+      ' - It just works!',
+      ' (patent pending)',
+      ' - Problem solved!',
+      ' - Trust me bro.',
+      ' - What could go wrong?',
+      '',
+      ' - As seen on TV!',
+      ' - Now with extra features!'
+    ]);
+    return `${prefix} ${core}${suffix}`.replace(/\s+/g, ' ').trim();
   }
 
   private pick(items: string[]) {
@@ -611,17 +634,9 @@ export class GameManager {
     const audienceCount = Math.max(0, activePlayers.length - 2);
     if (room.nastyPromptSubmissions.length < audienceCount) return;
     // Mix audience-submitted prompts with default prompts, then select randomly
-    const defaults = [
-      'The worst thing to say at a wedding is ____.',
-      'My new job title is officially “____.”',
-      'I knew it was a bad idea when the label said “____.”',
-      'Tonight’s dinner: ____ with a side of ____.',
-      'The first rule of my secret club is ____.'
-    ];
-
     const pool = [
       ...((room.nastyPromptSubmissions ?? []).map(p => p.prompt)),
-      ...defaults
+      ...nastyPrompts.slice(0, 10)  // Include some default prompts
     ];
 
     const selectedPrompt = pool[Math.floor(Math.random() * pool.length)];
