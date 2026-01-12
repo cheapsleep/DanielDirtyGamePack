@@ -180,6 +180,36 @@ export class GameManager {
 
     // Notify everyone in the room
     this.io.to(roomCode).emit('room_update', this.getRoomPublicState(room));
+
+    // If game is in AQ_QUESTION state, send the current question to the joining player
+    if (room.state === 'AQ_QUESTION' && room.aqCurrentQuestion) {
+      const questionIndex = room.aqCurrentQuestion - 1;
+      if (questionIndex >= 0 && questionIndex < autismQuizQuestions.length) {
+        socket.emit('aq_question', {
+          questionId: room.aqCurrentQuestion,
+          questionText: autismQuizQuestions[questionIndex].text,
+          questionNumber: room.aqCurrentQuestion,
+          totalQuestions: 20
+        });
+      }
+    }
+
+    // If game is in AQ_RESULTS state, send the results to the joining player
+    if (room.state === 'AQ_RESULTS' && room.aqScores) {
+      const rankings = Object.entries(room.aqScores)
+        .map(([playerId, score]) => {
+          const player = room.players.find(p => p.id === playerId);
+          return { id: playerId, name: player?.name ?? 'Unknown', score };
+        })
+        .sort((a, b) => a.score - b.score);
+      const winner = rankings[0];
+      socket.emit('aq_results', {
+        rankings,
+        winnerId: winner?.id ?? '',
+        winnerName: winner?.name ?? '',
+        certificate: generateCertificateSVG(winner?.name ?? 'Unknown', rankings)
+      });
+    }
   }
 
   handleCloseRoom(socket: Socket) {
