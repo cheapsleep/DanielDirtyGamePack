@@ -1,8 +1,9 @@
 import { Server, Socket } from 'socket.io';
 import { v4 as uuidv4 } from 'uuid';
 import { nastyPrompts, nastyAnswers } from './nastyPrompts';
+import { autismQuizQuestions, generateCertificateSVG } from './autismQuiz';
 
-type GameId = 'nasty-libs' | 'dubiously-patented';
+type GameId = 'nasty-libs' | 'dubiously-patented' | 'autism-assessment';
 
 interface Player {
   id: string;
@@ -34,6 +35,8 @@ interface Room {
     | 'DP_PRESENTING'
     | 'DP_INVESTING'
     | 'DP_RESULTS'
+    | 'AQ_QUESTION'
+    | 'AQ_RESULTS'
     | 'END';
   currentRound: number;
   totalRounds: number;
@@ -48,6 +51,10 @@ interface Room {
   presentationOrder?: string[];
   currentPresenterId?: string;
   currentInvestments?: Record<string, number>; // playerId -> amount
+  // Autism Quiz fields
+  aqCurrentQuestion?: number;
+  aqAnswers?: Record<string, Record<number, boolean>>; // playerId -> questionId -> agreed
+  aqScores?: Record<string, number>; // playerId -> score
   answers: { playerId: string; answer: string }[];
   votes: Record<string, number>; // answerIndex -> count
   votedBy?: Record<string, boolean>;
@@ -232,6 +239,9 @@ export class GameManager {
         break;
       case 'SUBMIT_VOTE':
         this.handleVote(room, socket.id, data.voteIndex);
+        break;
+      case 'AQ_ANSWER':
+        this.handleAQAnswer(room, socket.id, data.questionId, data.agreed);
         break;
       case 'NEXT_ROUND':
         if (this.isControllerSocket(room, socket.id)) {
@@ -590,10 +600,12 @@ export class GameManager {
   private startGame(room: Room) {
     let activePlayers = this.getActivePlayers(room);
     
-    // Auto-fill bots if less than 4 players
-    while (activePlayers.length < 4) {
-      this.addBot(room);
-      activePlayers = this.getActivePlayers(room);
+    // Auto-fill bots if less than 4 players (skip for autism quiz - no bots needed)
+    if (room.gameId !== 'autism-assessment') {
+      while (activePlayers.length < 4) {
+        this.addBot(room);
+        activePlayers = this.getActivePlayers(room);
+      }
     }
     
     room.answers = [];
@@ -604,6 +616,28 @@ export class GameManager {
       room.totalRounds = 5;
       room.currentRound = 1;
       this.startNastyRound(room);
+      return;
+    }
+
+    if (room.gameId === 'autism-assessment') {
+      room.totalRounds = 20; // 20 questions
+      room.currentRound = 1;
+      room.aqCurrentQuestion = 1;
+      room.aqAnswers = {};
+      room.aqScores = {};
+      // Initialize answer tracking for all players
+      for (const p of activePlayers) {
+        room.aqAnswers[p.id] = {};
+      }
+      room.state = 'AQ_QUESTION';
+      this.io.to(room.code).emit('game_started');
+      this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+      this.io.to(room.code).emit('aq_question', {
+        questionId: 1,
+        questionText: autismQuizQuestions[0].text,
+        questionNumber: 1,
+        totalQuestions: 20
+      });
       return;
     }
 
@@ -913,6 +947,96 @@ export class GameManager {
     }
   }
 
+  private handleAQAnswer(room: Room, socketId: string, questionId: number, agreed: boolean) {
+    if (room.gameId !== 'autism-assessment') return;
+    if (room.state !== 'AQ_QUESTION') return;
+    
+    const player = room.players.find(p => p.socketId === socketId);
+    if (!player) return;
+    
+    room.aqAnswers ??= {};
+    room.aqAnswers[player.id] ??= {};
+    
+    // Don't allow re-answering same question
+    if (room.aqAnswers[player.id][questionId] !== undefined) return;
+    
+    room.aqAnswers[player.id][questionId] = agreed;
+    
+    this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+    
+    // Check if all players have answered the current question
+    const activePlayers = this.getActivePlayers(room);
+    const currentQ = room.aqCurrentQuestion ?? 1;
+    const allAnswered = activePlayers.every(p => 
+      room.aqAnswers?.[p.id]?.[currentQ] !== undefined
+    );
+    
+    if (!allAnswered) return;
+    
+    // Everyone answered - move to next question or show results
+    if (currentQ >= 20) {
+      // Calculate final scores
+      this.calculateAQScores(room);
+      room.state = 'AQ_RESULTS';
+      
+      // Generate rankings
+      const rankings = activePlayers
+        .map(p => ({ 
+          id: p.id,
+          name: p.name, 
+          score: room.aqScores?.[p.id] ?? 0 
+        }))
+        .sort((a, b) => a.score - b.score); // Lower score = less autistic = winner
+      
+      const winner = rankings[0];
+      const certificate = generateCertificateSVG(winner.name, rankings);
+      const certificateDataUrl = `data:image/svg+xml;base64,${Buffer.from(certificate).toString('base64')}`;
+      
+      this.io.to(room.code).emit('aq_results', {
+        rankings,
+        winnerId: winner.id,
+        winnerName: winner.name,
+        certificate: certificateDataUrl
+      });
+      this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+    } else {
+      // Next question
+      room.aqCurrentQuestion = currentQ + 1;
+      room.currentRound = currentQ + 1;
+      const nextQuestion = autismQuizQuestions[currentQ]; // 0-indexed, currentQ is already the next index
+      
+      this.io.to(room.code).emit('aq_question', {
+        questionId: nextQuestion.id,
+        questionText: nextQuestion.text,
+        questionNumber: currentQ + 1,
+        totalQuestions: 20
+      });
+      this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+    }
+  }
+  
+  private calculateAQScores(room: Room) {
+    room.aqScores = {};
+    const activePlayers = this.getActivePlayers(room);
+    
+    for (const player of activePlayers) {
+      let score = 0;
+      const answers = room.aqAnswers?.[player.id] ?? {};
+      
+      for (const question of autismQuizQuestions) {
+        const agreed = answers[question.id];
+        if (agreed === undefined) continue;
+        
+        // Score increases when answer matches the "autistic" pattern
+        if ((agreed && question.agreeIsAutistic) || (!agreed && !question.agreeIsAutistic)) {
+          score++;
+        }
+      }
+      
+      room.aqScores[player.id] = score;
+    }
+  }
+
   private handleAnswer(room: Room, socketId: string, answerText: string) {
     const player = room.players.find(p => p.socketId === socketId);
     if (!player) return;
@@ -1048,6 +1172,11 @@ export class GameManager {
   }
 
   private getRoomPublicState(room: Room) {
+    // Count how many players have answered the current AQ question
+    const aqAnsweredCount = room.aqCurrentQuestion && room.aqAnswers
+      ? Object.values(room.aqAnswers).filter(a => a[room.aqCurrentQuestion!] !== undefined).length
+      : 0;
+    
     return {
       code: room.code,
       gameId: room.gameId,
@@ -1073,7 +1202,11 @@ export class GameManager {
       ,
       promptText: room.promptText
       ,
-      currentInvestments: room.currentInvestments ?? {}
+      currentInvestments: room.currentInvestments ?? {},
+      // Autism Quiz fields
+      aqCurrentQuestion: room.aqCurrentQuestion,
+      aqAnsweredCount,
+      aqScores: room.aqScores
     };
   }
 

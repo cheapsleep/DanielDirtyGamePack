@@ -113,6 +113,8 @@ type GameState =
   | 'DP_PRESENTING'
   | 'DP_INVESTING'
   | 'DP_RESULTS'
+  | 'AQ_QUESTION'
+  | 'AQ_RESULTS'
   | 'END';
 
 interface RoomPublicState {
@@ -125,6 +127,8 @@ interface RoomPublicState {
   controllerPlayerId?: string;
   players?: { id: string; name: string; isConnected: boolean; isBot?: boolean; score: number }[];
   promptText?: string;
+  aqCurrentQuestion?: number;
+  aqAnsweredCount?: number;
 }
 
 export default function PlayerScreen({ onBack }: PlayerScreenProps) {
@@ -146,6 +150,10 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
   const [drawingDraft, setDrawingDraft] = useState<string>('');
   const [investmentAmount, setInvestmentAmount] = useState<string>('');
   const [currentPresenterId, setCurrentPresenterId] = useState<string>('');
+  // Autism Quiz state
+  const [aqQuestion, setAqQuestion] = useState<{ questionId: number; questionText: string; questionNumber: number; totalQuestions: number } | null>(null);
+  const [aqResults, setAqResults] = useState<{ rankings: { id: string; name: string; score: number }[]; winnerId: string; winnerName: string; certificate: string } | null>(null);
+  const [aqAnswered, setAqAnswered] = useState(false);
 
   useEffect(() => {
     const hash = window.location.hash;
@@ -211,6 +219,25 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
         setInvestmentAmount('');
     });
 
+    socket.on('aq_question', (data: any) => {
+      setAqQuestion({
+        questionId: data.questionId,
+        questionText: data.questionText,
+        questionNumber: data.questionNumber,
+        totalQuestions: data.totalQuestions
+      });
+      setAqAnswered(false);
+    });
+
+    socket.on('aq_results', (data: any) => {
+      setAqResults({
+        rankings: data.rankings,
+        winnerId: data.winnerId,
+        winnerName: data.winnerName,
+        certificate: data.certificate
+      });
+    });
+
     socket.on('error', (data) => {
         if (data?.code === 'GAME_ERROR') {
           setSubmitted(false);
@@ -249,6 +276,8 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
       socket.off('dp_choices');
       socket.off('start_presentation');
       socket.off('start_investing');
+      socket.off('aq_question');
+      socket.off('aq_results');
       socket.off('error');
       socket.off('connect_error');
       socket.off('room_closed');
@@ -732,6 +761,105 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
                   </div>
                 )}
             </div>
+        )}
+
+        {/* Autism Quiz - Question */}
+        {gameState === 'AQ_QUESTION' && aqQuestion && (
+          <div className="text-center">
+            <div className="text-sm text-slate-400 mb-2">
+              Question {aqQuestion.questionNumber} of {aqQuestion.totalQuestions}
+            </div>
+            <div className="w-full bg-slate-700 rounded-full h-2 mb-6">
+              <div 
+                className="bg-blue-500 h-2 rounded-full transition-all duration-300" 
+                style={{ width: `${(aqQuestion.questionNumber / aqQuestion.totalQuestions) * 100}%` }}
+              />
+            </div>
+            
+            {!aqAnswered ? (
+              <>
+                <p className="text-xl mb-8 px-4">{aqQuestion.questionText}</p>
+                <div className="flex gap-4 justify-center">
+                  <WoodenButton 
+                    type="button" 
+                    variant="wood" 
+                    onClick={() => {
+                      socket.emit('action', { type: 'AQ_ANSWER', questionId: aqQuestion.questionId, agreed: true });
+                      setAqAnswered(true);
+                    }}
+                    className="px-8 py-4 text-lg"
+                  >
+                    AGREE
+                  </WoodenButton>
+                  <WoodenButton 
+                    type="button" 
+                    variant="red" 
+                    onClick={() => {
+                      socket.emit('action', { type: 'AQ_ANSWER', questionId: aqQuestion.questionId, agreed: false });
+                      setAqAnswered(true);
+                    }}
+                    className="px-8 py-4 text-lg"
+                  >
+                    DISAGREE
+                  </WoodenButton>
+                </div>
+              </>
+            ) : (
+              <div className="py-8">
+                <p className="text-slate-400 text-lg">Waiting for other players...</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Autism Quiz - Results */}
+        {gameState === 'AQ_RESULTS' && aqResults && (
+          <div className="text-center">
+            <h2 className="text-2xl font-bold mb-4">🎉 Results 🎉</h2>
+            {aqResults.winnerId === playerId ? (
+              <div className="mb-6">
+                <p className="text-green-400 text-xl font-bold">YOU WON!</p>
+                <p className="text-slate-400">Certified Least Autistic</p>
+              </div>
+            ) : (
+              <p className="text-slate-400 mb-6">Better luck next time!</p>
+            )}
+            
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold mb-2">Rankings:</h3>
+              <div className="space-y-1">
+                {aqResults.rankings.map((r, i) => (
+                  <div key={r.id} className={`${r.id === playerId ? 'text-yellow-400 font-bold' : 'text-slate-300'}`}>
+                    #{i + 1} {r.name} - Score: {r.score}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {aqResults.winnerId === playerId && (
+              <WoodenButton
+                type="button"
+                variant="wood"
+                onClick={() => {
+                  const link = document.createElement('a');
+                  link.href = aqResults.certificate;
+                  link.download = 'certified-least-autistic.svg';
+                  link.click();
+                }}
+                className="mb-4"
+              >
+                📜 DOWNLOAD CERTIFICATE
+              </WoodenButton>
+            )}
+
+            {isController && (
+              <div className="mt-4">
+                <WoodenButton type="button" variant="red" onClick={handleNextRound} className="w-full max-w-sm">
+                  FINISH
+                </WoodenButton>
+              </div>
+            )}
+          </div>
         )}
 
         {gameState === 'END' && (

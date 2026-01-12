@@ -21,6 +21,8 @@ type GameState =
   | 'DP_PRESENTING'
   | 'DP_INVESTING'
   | 'DP_RESULTS'
+  | 'AQ_QUESTION'
+  | 'AQ_RESULTS'
   | 'END';
 
 interface RoomState {
@@ -43,6 +45,10 @@ interface RoomState {
   currentTitle?: string;
   currentProblem?: string;
   promptText?: string;
+  // Autism Quiz fields
+  aqCurrentQuestion?: number;
+  aqAnsweredCount?: number;
+  aqScores?: Record<string, number>;
 }
 
 import WoodenButton from './WoodenButton';
@@ -67,6 +73,9 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
       title: string;
       prompt: string;
   } | null>(null);
+  // Autism Quiz state
+  const [aqQuestion, setAqQuestion] = useState<{ questionId: number; questionText: string; questionNumber: number; totalQuestions: number } | null>(null);
+  const [aqResults, setAqResults] = useState<{ rankings: { id: string; name: string; score: number }[]; winnerId: string; winnerName: string; certificate: string } | null>(null);
   
   useEffect(() => {
     // Update presentation data whenever a new presenter starts presenting
@@ -191,6 +200,14 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
         setRoundResults(data.results);
     });
 
+    socket.on('aq_question', (data) => {
+        setAqQuestion(data);
+    });
+
+    socket.on('aq_results', (data) => {
+        setAqResults(data);
+    });
+
     socket.on('game_over', () => {
         // Handle game over if needed separately, or rely on room state 'END'
     });
@@ -247,6 +264,8 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
       socket.off('start_investing');
       socket.off('start_voting');
       socket.off('round_results');
+      socket.off('aq_question');
+      socket.off('aq_results');
       socket.off('game_over');
       socket.off('error');
     };
@@ -565,6 +584,84 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
                     ))}
                 </div>
                 <div className="text-slate-400 text-lg">Controller advances the game.</div>
+            </div>
+        )}
+
+        {room.state === 'AQ_QUESTION' && aqQuestion && (
+            <div className="w-full h-full flex flex-col items-center justify-center">
+                <div className="text-center mb-8">
+                    <h2 className="text-2xl text-slate-400 mb-2">QUESTION {aqQuestion.questionNumber} / {aqQuestion.totalQuestions}</h2>
+                    <div className="w-full bg-slate-700 rounded-full h-3 mb-8">
+                        <div 
+                            className="bg-blue-500 h-3 rounded-full transition-all duration-500" 
+                            style={{ width: `${(aqQuestion.questionNumber / aqQuestion.totalQuestions) * 100}%` }}
+                        />
+                    </div>
+                </div>
+                
+                <div className="bg-slate-800 p-12 rounded-2xl max-w-4xl w-full text-center border-2 border-blue-500">
+                    <p className="text-4xl font-bold leading-relaxed">{aqQuestion.questionText}</p>
+                </div>
+                
+                <div className="mt-12 text-center">
+                    <div className="animate-pulse text-2xl text-blue-400 mb-4">Answer on your device!</div>
+                    <p className="text-slate-400">
+                        {room.aqAnsweredCount ?? 0} / {room.players.length} players answered
+                    </p>
+                </div>
+            </div>
+        )}
+
+        {room.state === 'AQ_RESULTS' && aqResults && (
+            <div className="w-full h-full flex flex-col items-center justify-center">
+                <h1 className="text-5xl font-black text-green-400 mb-4">🏆 CERTIFIED LEAST AUTISTIC 🏆</h1>
+                <h2 className="text-4xl font-bold text-white mb-12">{aqResults.winnerName}</h2>
+                
+                <div className="grid grid-cols-2 gap-12 w-full max-w-5xl">
+                    <div className="bg-slate-800 p-6 rounded-xl">
+                        <h3 className="text-xl text-slate-400 mb-4 text-center">GROUP RANKINGS</h3>
+                        <div className="space-y-3">
+                            {aqResults.rankings.map((r, idx) => (
+                                <div 
+                                    key={r.id} 
+                                    className={`flex justify-between items-center p-4 rounded-lg ${idx === 0 ? 'bg-green-900/50 border-2 border-green-500' : 'bg-slate-900'}`}
+                                >
+                                    <div className="flex items-center gap-4">
+                                        <span className="text-2xl font-bold w-8">{idx + 1}</span>
+                                        <span className="text-xl">{r.name}</span>
+                                    </div>
+                                    <span className={`text-xl font-bold ${idx === 0 ? 'text-green-400' : idx === aqResults.rankings.length - 1 ? 'text-red-400' : 'text-slate-400'}`}>
+                                        {r.score}/20
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                        <p className="text-sm text-slate-500 mt-4 text-center">Lower score = Less autistic = Winner!</p>
+                    </div>
+                    
+                    <div className="flex flex-col items-center justify-center">
+                        <img 
+                            src={aqResults.certificate} 
+                            alt="Certificate" 
+                            className="max-w-full rounded-lg shadow-2xl border-4 border-yellow-500"
+                        />
+                        <a
+                            href={aqResults.certificate}
+                            download={`${aqResults.winnerName}_Least_Autistic_Certificate.svg`}
+                            className="mt-6 px-6 py-3 bg-yellow-500 text-black font-bold rounded-lg hover:bg-yellow-400 transition-colors"
+                        >
+                            📥 Download Certificate
+                        </a>
+                    </div>
+                </div>
+                
+                <WoodenButton 
+                  variant="red"
+                  onClick={handleBack}
+                  className="mt-12"
+                >
+                  BACK TO MENU
+                </WoodenButton>
             </div>
         )}
 

@@ -22,6 +22,13 @@ export default function GameLibrary({ onSelectGame }: GameLibraryProps) {
       color: 'bg-emerald-600',
       logo: '/assets/Dubiously_Patented_Logo.png',
     },
+    {
+      id: 'autism-assessment',
+      title: 'AUTISM ASSESSMENT',
+      description: 'A 20-question quiz to determine who in your group is the most neurotypical. The least autistic player wins a certificate!',
+      color: 'bg-blue-600',
+      logo: null,
+    },
   ];
 
   return (
