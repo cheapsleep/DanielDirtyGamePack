@@ -12,6 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       NODE_VERSION: '18'
+      APPIMAGE_EXTRACT_AND_RUN: '1'
     steps:
       - uses: actions/checkout@v4
 
@@ -34,7 +35,8 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             libwebkit2gtk-4.1-dev \
             libssl-dev libgtk-3-dev libayatana-appindicator3-dev libnotify-dev \
-            build-essential pkg-config curl ca-certificates
+            build-essential pkg-config curl ca-certificates \
+            libfuse2 desktop-file-utils libglib2.0-bin
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@v1
@@ -67,7 +69,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: tauri-linux-artifacts
-          path: client/src-tauri/target/release/bundle || client/target/release/bundle || client/target
+          path: |
+            client/src-tauri/target/release/bundle/**
+            client/target/release/bundle/**
+            client/target/**
 
   build-windows:
     name: Build Windows (MSI/EXE)
@@ -105,6 +110,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: tauri-windows-artifacts
-          path: client/src-tauri/target/release/bundle || client/target/release/bundle || client/target
+          path: |
+            client/src-tauri/target/release/bundle/**
+            client/target/release/bundle/**
+            client/target/**
 
   # Optional: Add macOS build later if desired
