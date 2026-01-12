@@ -57,9 +57,11 @@ jobs:
           curl -L -o linuxdeploy-plugin-appimage-x86_64.AppImage https://github.com/linuxdeploy/linuxdeploy-plugin-appimage/releases/download/continuous/linuxdeploy-plugin-appimage-x86_64.AppImage
           chmod +x linuxdeploy-*.AppImage
           sudo mv linuxdeploy-*.AppImage /usr/local/bin/
-          sudo ln -sf /usr/local/bin/linuxdeploy-x86_64.AppImage /usr/local/bin/linuxdeploy
-          sudo ln -sf /usr/local/bin/linuxdeploy-plugin-appimage-x86_64.AppImage /usr/local/bin/linuxdeploy-plugin-appimage
-          export APPIMAGE_EXTRACT_AND_RUN=1
+          # Create wrapper scripts so calling `linuxdeploy` runs the AppImage with the
+          # --appimage-extract-and-run flag, which avoids FUSE issues on GH runners.
+          sudo bash -lc 'printf "%s\n" "#!/bin/sh" "exec /usr/local/bin/linuxdeploy-x86_64.AppImage --appimage-extract-and-run \"$@\"" > /usr/local/bin/linuxdeploy'
+          sudo bash -lc 'printf "%s\n" "#!/bin/sh" "exec /usr/local/bin/linuxdeploy-plugin-appimage-x86_64.AppImage --appimage-extract-and-run \"$@\"" > /usr/local/bin/linuxdeploy-plugin-appimage'
+          sudo chmod +x /usr/local/bin/linuxdeploy /usr/local/bin/linuxdeploy-plugin-appimage
 
       - name: Build Tauri bundle
         run: npx tauri build
