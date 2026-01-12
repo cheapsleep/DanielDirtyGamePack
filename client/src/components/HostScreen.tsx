@@ -157,6 +157,12 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
     socket.on('room_update', (roomState: RoomState) => {
       didGetRoomUpdate = true;
       setRoom(roomState);
+      // If the game ended, clear saved host info so starting again creates a fresh room
+      try {
+        if (roomState?.state === 'END') sessionStorage.removeItem(storageKey);
+      } catch {
+        // ignore
+      }
     });
 
     socket.on('new_prompt', (data) => {
@@ -544,11 +550,11 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
                     ))}
                 </div>
                 <WoodenButton 
-                    variant="red"
-                    onClick={onBack}
-                    className="mt-12"
+                  variant="red"
+                  onClick={handleBack}
+                  className="mt-12"
                 >
-                    BACK TO MENU
+                  BACK TO MENU
                 </WoodenButton>
             </div>
         )}
