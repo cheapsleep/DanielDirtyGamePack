@@ -68,15 +68,26 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
   } | null>(null);
   
   useEffect(() => {
-    if ((room?.state === 'DP_PRESENTING' || room?.state === 'DP_INVESTING') && !presentationData && room.currentDrawing) {
+    // Update presentation data whenever a new presenter starts presenting
+    if (
+      room &&
+      (room.state === 'DP_PRESENTING' || room.state === 'DP_INVESTING') &&
+      room.currentPresenterId &&
+      room.currentDrawing
+    ) {
+      if (!presentationData || presentationData.presenterId !== room.currentPresenterId) {
         setPresentationData({
-            presenterId: room.currentPresenterId || '',
-            drawing: room.currentDrawing,
-            title: room.currentTitle || '',
-            prompt: room.currentProblem || ''
+          presenterId: room.currentPresenterId,
+          drawing: room.currentDrawing,
+          title: room.currentTitle || '',
+          prompt: room.currentProblem || ''
         });
+      }
+    } else {
+      // Clear presentation data when leaving presentation/investing phases
+      if (presentationData) setPresentationData(null);
     }
-  }, [room, presentationData]);
+  }, [room?.state, room?.currentPresenterId, room?.currentDrawing, room?.currentTitle, room?.currentProblem, presentationData]);
 
   const roomCode = room?.code;
   const joinBase =
@@ -87,6 +98,8 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
   const joinUrl = roomCode ? `${joinBase}#/join?room=${roomCode}${
     publicServerUrl ? `&server=${encodeURIComponent(publicServerUrl)}` : ''
   }` : '';
+
+  const qrSrc = roomCode ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(joinUrl)}` : '';
 
   useEffect(() => {
     if (shortUrl || !joinUrl) return;
@@ -308,7 +321,15 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
         <div>
           <h2 className="text-xl text-slate-400">JOIN AT</h2>
           <h1 className="text-4xl font-bold text-blue-400">{displayUrl}</h1>
-          <div className="text-sm text-slate-500 mt-2 uppercase tracking-widest">{title}</div>
+          <div className="flex items-center gap-4 mt-3">
+            {qrSrc && (
+              <img src={qrSrc} alt="Join QR code" className="w-24 h-24 bg-white p-1 rounded" />
+            )}
+            <div>
+              <div className="text-sm text-slate-500 uppercase tracking-widest break-words">{title}</div>
+              <div className="text-xs text-slate-400 mt-2 break-words">{shortUrl || joinUrl}</div>
+            </div>
+          </div>
         </div>
         <div className="text-center">
             <h2 className="text-xl text-slate-400">ROOM CODE</h2>
