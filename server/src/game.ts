@@ -511,6 +511,26 @@ export class GameManager {
         this.handleInvest(room, bot.socketId, amount);
       }
     }
+
+    // Autism Assessment - bots answer questions
+    if (room.state === 'AQ_QUESTION') {
+      const currentQ = room.aqCurrentQuestion ?? 1;
+      for (const bot of bots) {
+        if (room.state !== 'AQ_QUESTION') break;
+        
+        // Check if bot already answered this question
+        const already = room.aqAnswers?.[bot.id]?.[currentQ] !== undefined;
+        if (already) continue;
+        
+        // Human-like delay - "reading" and "thinking" about the question
+        await this.humanDelay(1500, 5000);
+        if (room.state !== 'AQ_QUESTION') break;
+        
+        // Random answer - bots are unpredictable
+        const agreed = Math.random() > 0.5;
+        this.handleAQAnswer(room, bot.socketId, currentQ, agreed);
+      }
+    }
   }
 
   private async generateBotPrompt(kind: 'nasty_prompt' | 'nasty_answer' | 'dp_problem' | 'dp_answer', context?: string) {
@@ -668,6 +688,7 @@ export class GameManager {
         questionNumber: 1,
         totalQuestions: 20
       });
+      this.scheduleBotRun(room);
       return;
     }
 
@@ -1042,6 +1063,7 @@ export class GameManager {
         totalQuestions: 20
       });
       this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+      this.scheduleBotRun(room);
     }
   }
   

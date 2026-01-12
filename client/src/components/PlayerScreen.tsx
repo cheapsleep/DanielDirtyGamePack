@@ -420,10 +420,53 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
   const isController = Boolean(playerId && room?.controllerPlayerId && room.controllerPlayerId === playerId);
   const totalPlayers = (room?.players ?? []).filter(p => p.isConnected || p.isBot).length;
 
+  const handleLeaveGame = () => {
+    // Reset all state and go back to join screen
+    setJoined(false);
+    setRoom(null);
+    setError('');
+    setSubmitted(false);
+    setPrompt('');
+    setVotingOptions([]);
+    setAnswerDraft('');
+    setPromptDraft('');
+    setProblemsDraft(['', '', '']);
+    setDpChoices([]);
+    setDpSelected('');
+    setDrawingDraft('');
+    setInvestmentAmount('');
+    setAqQuestion(null);
+    setAqResults(null);
+    setAqAnswered(false);
+    // Clear stored playerId for this room
+    if (roomCode) {
+      try {
+        localStorage.removeItem(`playerId:${roomCode.toUpperCase()}`);
+      } catch {
+        // ignore
+      }
+    }
+  };
+
+  const isInGame = gameState !== 'LOBBY' && gameState !== 'END';
+
   return (
     <div className="w-full h-screen p-4 flex flex-col bg-slate-900 text-white">
       <div className="flex justify-between items-center mb-4 text-sm text-slate-500 border-b border-slate-700 pb-2">
-          <span className="font-bold text-pink-500">{playerName}</span>
+          <div className="flex items-center gap-2">
+            {isInGame && (
+              <button
+                onClick={handleLeaveGame}
+                className="text-slate-400 hover:text-white transition-colors p-1"
+                title="Leave game"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+            )}
+            <span className="font-bold text-pink-500">{playerName}</span>
+          </div>
           <span className="font-mono bg-slate-800 px-2 py-1 rounded">Room: {roomCode}</span>
       </div>
 
