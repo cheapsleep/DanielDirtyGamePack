@@ -390,12 +390,6 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
   const isController = Boolean(playerId && room?.controllerPlayerId && room.controllerPlayerId === playerId);
   const totalPlayers = (room?.players ?? []).filter(p => p.isConnected || p.isBot).length;
 
-  const promptTitle = gameId === 'dubiously-patented' ? 'PROBLEM' : 'PROMPT';
-  const answerPlaceholder =
-    gameId === 'dubiously-patented'
-      ? 'Name your invention + what it does...'
-      : 'Type something funny...';
-
   return (
     <div className="w-full h-screen p-4 flex flex-col bg-slate-900 text-white">
       <div className="flex justify-between items-center mb-4 text-sm text-slate-500 border-b border-slate-700 pb-2">
