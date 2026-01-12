@@ -1,6 +1,6 @@
 @font-face {
   font-family: 'Bedrock BT';
-  src: url('./assets/fonts/Bedrock-BT.ttf?v=1') format('truetype');
+  src: url('./assets/fonts/Bedrock-BT.ttf?v=2') format('truetype');
 }
 
 @tailwind base;
