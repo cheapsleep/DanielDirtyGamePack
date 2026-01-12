@@ -1,0 +1,11 @@
+#!/bin/sh
+# AppRun wrapper: force X11 + software GL + disable WebKit compositing
+# Placed into the AppDir root so the AppImage uses these env vars before starting the app.
+set -e
+HERE="$(dirname "$(readlink -f "$0")")"
+
+export GDK_BACKEND=x11
+export LIBGL_ALWAYS_SOFTWARE=1
+export WEBKIT_DISABLE_COMPOSITING=1
+
+exec "$HERE"/usr/bin/app "$@"
