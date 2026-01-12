@@ -25,7 +25,35 @@ export default function GameLibrary({ onSelectGame }: GameLibraryProps) {
   ];
 
   return (
-    <div className="min-h-screen text-white p-8 flex flex-col prehistoric-bg">
+    <div className="min-h-screen text-white p-8 flex flex-col prehistoric-bg relative overflow-hidden">
+      {/* Background texture: low-opacity prehistoric shapes */}
+      <div className="absolute inset-0 z-0 pointer-events-none select-none opacity-30">
+        <svg className="w-full h-full" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="g1" x1="0" x2="1">
+              <stop offset="0%" stopColor="#6b4a2a" stopOpacity="0.06" />
+              <stop offset="100%" stopColor="#3b2b1b" stopOpacity="0.02" />
+            </linearGradient>
+          </defs>
+          <rect width="1200" height="800" fill="url(#g1)" />
+          {/* big stone silhouettes */}
+          <g transform="translate(80,120) scale(1.6)" fill="#4a331f">
+            <ellipse cx="60" cy="140" rx="140" ry="50" />
+            <ellipse cx="380" cy="180" rx="200" ry="70" />
+            <ellipse cx="920" cy="120" rx="220" ry="80" />
+          </g>
+          {/* primitive tree shapes */}
+          <g transform="translate(40,40)" fill="#3b2b1b" opacity="0.6">
+            <circle cx="220" cy="80" r="36" />
+            <circle cx="260" cy="60" r="28" />
+            <circle cx="240" cy="120" r="42" />
+          </g>
+          {/* playful dino silhouette */}
+          <g transform="translate(760,420) scale(1)" fill="#2f1f14" opacity="0.25">
+            <path d="M24 96c12-36 64-60 128-44 40 10 64 36 88 30 28-8 40-38 72-36 32 2 76 44 104 46 16 1 28-6 36-12 6 18 12 54-6 96-20 46-66 84-160 78-88-6-220-56-267-106-18-20-18-48-1-72z" />
+          </g>
+        </svg>
+      </div>
       <div className="flex justify-between items-center mb-12">
         <h1 className="text-5xl font-extrabold prehistoric-title tracking-widest uppercase drop-shadow-lg flex items-center gap-4">
           <svg width="56" height="40" viewBox="0 0 56 40" fill="none" xmlns="http://www.w3.org/2000/svg" className="-ml-2">
@@ -41,10 +69,10 @@ export default function GameLibrary({ onSelectGame }: GameLibraryProps) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-7xl mx-auto w-full">
         {games.map((game) => (
-            <motion.div
+          <motion.div
             key={game.id}
             whileHover={{ scale: 1.02, y: -5 }}
-            className="stone-card rounded-xl overflow-hidden shadow-2xl flex flex-col"
+            className="stone-card rounded-xl overflow-hidden shadow-2xl flex flex-col relative z-10"
           >
             <div className={`h-48 ${game.color} flex items-center justify-center p-4 relative overflow-hidden`}> 
               <div className="absolute inset-0 bg-black opacity-20"></div>
@@ -76,7 +104,7 @@ export default function GameLibrary({ onSelectGame }: GameLibraryProps) {
         ))}
         
         {/* Placeholder for "Coming Soon" */}
-        <div className="bg-slate-800/50 rounded-xl border-4 border-dashed border-slate-700 flex flex-col items-center justify-center p-12 text-slate-500">
+        <div className="bg-slate-800/50 rounded-xl border-4 border-dashed border-slate-700 flex flex-col items-center justify-center p-12 text-slate-500 relative z-10">
             <span className="text-6xl mb-4">?</span>
             <h3 className="text-2xl font-bold uppercase">More Coming Soon</h3>
         </div>
