@@ -65,9 +65,124 @@ export class GameManager {
   private rooms: Map<string, Room> = new Map();
   private socketRoomMap: Map<string, string> = new Map(); // socketId -> roomCode
   private botRun: Map<string, { running: boolean; pending: boolean }> = new Map();
+  private aqTimers: Map<string, NodeJS.Timeout> = new Map(); // roomCode -> timer
 
   constructor(io: Server) {
     this.io = io;
+  }
+
+  private startAQTimer(room: Room) {
+    // Clear any existing timer
+    this.clearAQTimer(room.code);
+    
+    const questionNum = room.aqCurrentQuestion ?? 1;
+    const startTime = Date.now();
+    const duration = 30000; // 30 seconds
+    
+    // Emit timer start to clients
+    this.io.to(room.code).emit('aq_timer', { timeLeft: 30, questionNumber: questionNum });
+    
+    // Set up countdown updates every second
+    const countdownInterval = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const remaining = Math.max(0, Math.ceil((duration - elapsed) / 1000));
+      this.io.to(room.code).emit('aq_timer', { timeLeft: remaining, questionNumber: questionNum });
+    }, 1000);
+    
+    // Set the main timer
+    const timer = setTimeout(() => {
+      clearInterval(countdownInterval);
+      this.handleAQTimeout(room.code, questionNum);
+    }, duration);
+    
+    // Store both timer and interval for cleanup
+    this.aqTimers.set(room.code, timer);
+    this.aqTimers.set(`${room.code}_interval`, countdownInterval);
+  }
+  
+  private clearAQTimer(roomCode: string) {
+    const timer = this.aqTimers.get(roomCode);
+    if (timer) {
+      clearTimeout(timer);
+      this.aqTimers.delete(roomCode);
+    }
+    const interval = this.aqTimers.get(`${roomCode}_interval`);
+    if (interval) {
+      clearInterval(interval);
+      this.aqTimers.delete(`${roomCode}_interval`);
+    }
+  }
+  
+  private handleAQTimeout(roomCode: string, questionNum: number) {
+    const room = this.rooms.get(roomCode);
+    if (!room) return;
+    if (room.state !== 'AQ_QUESTION') return;
+    if (room.aqCurrentQuestion !== questionNum) return; // Question already moved on
+    
+    const activePlayers = this.getActivePlayers(room);
+    const currentQ = room.aqCurrentQuestion ?? 1;
+    
+    // Find players who didn't answer and penalize them
+    for (const player of activePlayers) {
+      if (room.aqAnswers?.[player.id]?.[currentQ] === undefined) {
+        // Player didn't answer - mark as timed out with penalty
+        room.aqAnswers ??= {};
+        room.aqAnswers[player.id] ??= {};
+        // Store special 'timeout' marker - we'll give them a penalty point during scoring
+        room.aqAnswers[player.id][currentQ] = 'timeout' as unknown as boolean;
+      }
+    }
+    
+    // Move to next question or results
+    this.advanceAQQuestion(room);
+  }
+  
+  private advanceAQQuestion(room: Room) {
+    const currentQ = room.aqCurrentQuestion ?? 1;
+    const activePlayers = this.getActivePlayers(room);
+    
+    if (currentQ >= 20) {
+      // Calculate final scores
+      this.clearAQTimer(room.code);
+      this.calculateAQScores(room);
+      room.state = 'AQ_RESULTS';
+      
+      // Generate rankings
+      const rankings = activePlayers
+        .map(p => ({ 
+          id: p.id,
+          name: p.name, 
+          score: room.aqScores?.[p.id] ?? 0 
+        }))
+        .sort((a, b) => a.score - b.score); // Lower score = less autistic = winner
+      
+      const winner = rankings[0];
+      const certificate = generateCertificateSVG(winner.name, rankings);
+      const certificateDataUrl = `data:image/svg+xml;base64,${Buffer.from(certificate).toString('base64')}`;
+      
+      this.io.to(room.code).emit('aq_results', {
+        rankings,
+        winnerId: winner.id,
+        winnerName: winner.name,
+        certificate: certificateDataUrl
+      });
+      this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+    } else {
+      // Next question
+      room.aqCurrentQuestion = currentQ + 1;
+      room.currentRound = currentQ + 1;
+      const nextQuestion = autismQuizQuestions[currentQ]; // 0-indexed, currentQ is already the next index
+      
+      this.io.to(room.code).emit('aq_question', {
+        questionId: nextQuestion.id,
+        questionText: nextQuestion.text,
+        questionNumber: currentQ + 1,
+        totalQuestions: 20
+      });
+      this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+      this.startAQTimer(room);
+      this.scheduleBotRun(room);
+    }
   }
 
   handleCreateRoom(socket: Socket, gameId?: GameId) {
@@ -688,6 +803,7 @@ export class GameManager {
         questionNumber: 1,
         totalQuestions: 20
       });
+      this.startAQTimer(room);
       this.scheduleBotRun(room);
       return;
     }
@@ -1024,47 +1140,9 @@ export class GameManager {
     
     if (!allAnswered) return;
     
-    // Everyone answered - move to next question or show results
-    if (currentQ >= 20) {
-      // Calculate final scores
-      this.calculateAQScores(room);
-      room.state = 'AQ_RESULTS';
-      
-      // Generate rankings
-      const rankings = activePlayers
-        .map(p => ({ 
-          id: p.id,
-          name: p.name, 
-          score: room.aqScores?.[p.id] ?? 0 
-        }))
-        .sort((a, b) => a.score - b.score); // Lower score = less autistic = winner
-      
-      const winner = rankings[0];
-      const certificate = generateCertificateSVG(winner.name, rankings);
-      const certificateDataUrl = `data:image/svg+xml;base64,${Buffer.from(certificate).toString('base64')}`;
-      
-      this.io.to(room.code).emit('aq_results', {
-        rankings,
-        winnerId: winner.id,
-        winnerName: winner.name,
-        certificate: certificateDataUrl
-      });
-      this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
-    } else {
-      // Next question
-      room.aqCurrentQuestion = currentQ + 1;
-      room.currentRound = currentQ + 1;
-      const nextQuestion = autismQuizQuestions[currentQ]; // 0-indexed, currentQ is already the next index
-      
-      this.io.to(room.code).emit('aq_question', {
-        questionId: nextQuestion.id,
-        questionText: nextQuestion.text,
-        questionNumber: currentQ + 1,
-        totalQuestions: 20
-      });
-      this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
-      this.scheduleBotRun(room);
-    }
+    // Everyone answered - clear timer and advance
+    this.clearAQTimer(room.code);
+    this.advanceAQQuestion(room);
   }
   
   private calculateAQScores(room: Room) {
@@ -1078,6 +1156,12 @@ export class GameManager {
       for (const question of autismQuizQuestions) {
         const agreed = answers[question.id];
         if (agreed === undefined) continue;
+        
+        // Timeout penalty - counts as 1 point towards autism score
+        if (agreed === ('timeout' as unknown as boolean)) {
+          score++;
+          continue;
+        }
         
         // Score increases when answer matches the "autistic" pattern
         if ((agreed && question.agreeIsAutistic) || (!agreed && !question.agreeIsAutistic)) {

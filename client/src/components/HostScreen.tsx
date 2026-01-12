@@ -208,6 +208,10 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
         setAqResults(data);
     });
 
+    socket.on('aq_timer', (data: { timeLeft: number; questionNumber: number }) => {
+        setTimeLeft(data.timeLeft);
+    });
+
     socket.on('game_over', () => {
         // Handle game over if needed separately, or rely on room state 'END'
     });
@@ -266,6 +270,7 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
       socket.off('round_results');
       socket.off('aq_question');
       socket.off('aq_results');
+      socket.off('aq_timer');
       socket.off('game_over');
       socket.off('error');
     };
@@ -591,11 +596,15 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
             <div className="w-full h-full flex flex-col items-center justify-center">
                 <div className="text-center mb-8">
                     <h2 className="text-2xl text-slate-400 mb-2">QUESTION {aqQuestion.questionNumber} / {aqQuestion.totalQuestions}</h2>
-                    <div className="w-full bg-slate-700 rounded-full h-3 mb-8">
+                    <div className="w-full bg-slate-700 rounded-full h-3 mb-4">
                         <div 
                             className="bg-blue-500 h-3 rounded-full transition-all duration-500" 
                             style={{ width: `${(aqQuestion.questionNumber / aqQuestion.totalQuestions) * 100}%` }}
                         />
+                    </div>
+                    {/* Timer */}
+                    <div className={`text-6xl font-black ${timeLeft <= 10 ? 'text-red-500 animate-pulse' : 'text-yellow-400'}`}>
+                        {timeLeft}s
                     </div>
                 </div>
                 

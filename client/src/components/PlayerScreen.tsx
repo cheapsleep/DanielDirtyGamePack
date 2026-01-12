@@ -154,6 +154,7 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
   const [aqQuestion, setAqQuestion] = useState<{ questionId: number; questionText: string; questionNumber: number; totalQuestions: number } | null>(null);
   const [aqResults, setAqResults] = useState<{ rankings: { id: string; name: string; score: number }[]; winnerId: string; winnerName: string; certificate: string } | null>(null);
   const [aqAnswered, setAqAnswered] = useState(false);
+  const [aqTimeLeft, setAqTimeLeft] = useState(30);
 
   useEffect(() => {
     const hash = window.location.hash;
@@ -238,6 +239,10 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
       });
     });
 
+    socket.on('aq_timer', (data: { timeLeft: number; questionNumber: number }) => {
+      setAqTimeLeft(data.timeLeft);
+    });
+
     socket.on('error', (data) => {
         if (data?.code === 'GAME_ERROR') {
           setSubmitted(false);
@@ -278,6 +283,7 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
       socket.off('start_investing');
       socket.off('aq_question');
       socket.off('aq_results');
+      socket.off('aq_timer');
       socket.off('error');
       socket.off('connect_error');
       socket.off('room_closed');
@@ -812,11 +818,15 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
             <div className="text-sm text-slate-400 mb-2">
               Question {aqQuestion.questionNumber} of {aqQuestion.totalQuestions}
             </div>
-            <div className="w-full bg-slate-700 rounded-full h-2 mb-6">
+            <div className="w-full bg-slate-700 rounded-full h-2 mb-4">
               <div 
                 className="bg-blue-500 h-2 rounded-full transition-all duration-300" 
                 style={{ width: `${(aqQuestion.questionNumber / aqQuestion.totalQuestions) * 100}%` }}
               />
+            </div>
+            {/* Timer */}
+            <div className={`text-4xl font-black mb-4 ${aqTimeLeft <= 10 ? 'text-red-500 animate-pulse' : 'text-yellow-400'}`}>
+              {aqTimeLeft}s
             </div>
             
             {!aqAnswered ? (
