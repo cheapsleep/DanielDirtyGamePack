@@ -4,14 +4,14 @@
 
 @font-face {
   font-family: 'Bedrock BT';
-  src: url('/assets/fonts/Bedrock-BT.ttf') format('truetype');
+  src: url('/Bedrock-BT.ttf') format('truetype');
   font-weight: normal;
   font-style: normal;
 }
 
 @layer base {
   * {
-    font-family: 'Bedrock BT', system-ui, sans-serif;
+    font-family: 'Bedrock BT', system-ui, sans-serif !important;
   }
 
   body {
