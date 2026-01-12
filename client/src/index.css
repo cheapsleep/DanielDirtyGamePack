@@ -1,6 +1,9 @@
 @font-face {
-  font-family: 'Bedrock BT';
-  src: url('./assets/fonts/Bedrock-BT.ttf?v=2') format('truetype');
+  font-family: 'JelloStone';
+  src: url('/JelloStone-YqKz8.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
 }
 
 @tailwind base;
@@ -8,8 +11,13 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    /* slightly larger base font-size for the whole app */
+    font-size: 112%;
+  }
+
   * {
-    font-family: 'Bedrock BT', system-ui, sans-serif !important;
+    font-family: 'JelloStone', system-ui, sans-serif !important;
   }
 
   body {
