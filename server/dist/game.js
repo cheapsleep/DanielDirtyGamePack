@@ -11,12 +11,132 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.GameManager = void 0;
 const uuid_1 = require("uuid");
+const nastyPrompts_1 = require("./nastyPrompts");
+const autismQuiz_1 = require("./autismQuiz");
+const scribbleWords_1 = require("./scribbleWords");
 class GameManager {
     constructor(io) {
         this.rooms = new Map();
         this.socketRoomMap = new Map(); // socketId -> roomCode
         this.botRun = new Map();
+        this.aqTimers = new Map(); // roomCode -> timer
+        this.scTimers = new Map(); // roomCode -> timer (Scribble Scrabble)
         this.io = io;
+    }
+    startAQTimer(room) {
+        var _a;
+        // Clear any existing timer
+        this.clearAQTimer(room.code);
+        const questionNum = (_a = room.aqCurrentQuestion) !== null && _a !== void 0 ? _a : 1;
+        const startTime = Date.now();
+        const duration = 30000; // 30 seconds
+        // Emit timer start to clients
+        this.io.to(room.code).emit('aq_timer', { timeLeft: 30, questionNumber: questionNum });
+        // Set up countdown updates every second
+        const countdownInterval = setInterval(() => {
+            const elapsed = Date.now() - startTime;
+            const remaining = Math.max(0, Math.ceil((duration - elapsed) / 1000));
+            this.io.to(room.code).emit('aq_timer', { timeLeft: remaining, questionNumber: questionNum });
+        }, 1000);
+        // Set the main timer
+        const timer = setTimeout(() => {
+            clearInterval(countdownInterval);
+            this.handleAQTimeout(room.code, questionNum);
+        }, duration);
+        // Store both timer and interval for cleanup
+        this.aqTimers.set(room.code, timer);
+        this.aqTimers.set(`${room.code}_interval`, countdownInterval);
+    }
+    clearAQTimer(roomCode) {
+        const timer = this.aqTimers.get(roomCode);
+        if (timer) {
+            clearTimeout(timer);
+            this.aqTimers.delete(roomCode);
+        }
+        const interval = this.aqTimers.get(`${roomCode}_interval`);
+        if (interval) {
+            clearInterval(interval);
+            this.aqTimers.delete(`${roomCode}_interval`);
+        }
+    }
+    handleAQTimeout(roomCode, questionNum) {
+        var _a, _b, _c, _d, _e;
+        var _f, _g;
+        const room = this.rooms.get(roomCode);
+        if (!room)
+            return;
+        if (room.state !== 'AQ_QUESTION')
+            return;
+        if (room.aqCurrentQuestion !== questionNum)
+            return; // Question already moved on
+        const activePlayers = this.getActivePlayers(room);
+        const currentQ = (_a = room.aqCurrentQuestion) !== null && _a !== void 0 ? _a : 1;
+        // Find players who didn't answer and penalize them
+        for (const player of activePlayers) {
+            if (((_c = (_b = room.aqAnswers) === null || _b === void 0 ? void 0 : _b[player.id]) === null || _c === void 0 ? void 0 : _c[currentQ]) === undefined) {
+                // Player didn't answer - mark as timed out with penalty
+                (_d = room.aqAnswers) !== null && _d !== void 0 ? _d : (room.aqAnswers = {});
+                (_e = (_f = room.aqAnswers)[_g = player.id]) !== null && _e !== void 0 ? _e : (_f[_g] = {});
+                // Store special 'timeout' marker - we'll give them a penalty point during scoring
+                room.aqAnswers[player.id][currentQ] = 'timeout';
+            }
+        }
+        // Move to next question or results
+        this.advanceAQQuestion(room);
+    }
+    advanceAQQuestion(room) {
+        var _a, _b;
+        const currentQ = (_a = room.aqCurrentQuestion) !== null && _a !== void 0 ? _a : 1;
+        const activePlayers = this.getActivePlayers(room);
+        if (currentQ >= 20) {
+            // Calculate final scores
+            this.clearAQTimer(room.code);
+            this.calculateAQScores(room);
+            room.state = 'AQ_RESULTS';
+            // Generate rankings
+            const rankings = activePlayers
+                .map(p => {
+                var _a, _b;
+                return ({
+                    id: p.id,
+                    name: p.name,
+                    score: (_b = (_a = room.aqScores) === null || _a === void 0 ? void 0 : _a[p.id]) !== null && _b !== void 0 ? _b : 0
+                });
+            })
+                .sort((a, b) => a.score - b.score); // Lower score = less autistic = winner
+            const winner = rankings[0];
+            const loser = rankings[rankings.length - 1];
+            const certificate = (0, autismQuiz_1.generateCertificateSVG)(winner.name, rankings);
+            const certificateDataUrl = `data:image/svg+xml;base64,${Buffer.from(certificate).toString('base64')}`;
+            const loserCertificate = (0, autismQuiz_1.generateMostAutisticCertificateSVG)(loser.name, rankings);
+            const loserCertificateDataUrl = `data:image/svg+xml;base64,${Buffer.from(loserCertificate).toString('base64')}`;
+            this.io.to(room.code).emit('aq_results', {
+                rankings,
+                winnerId: winner.id,
+                winnerName: winner.name,
+                certificate: certificateDataUrl,
+                loserId: loser.id,
+                loserName: loser.name,
+                loserCertificate: loserCertificateDataUrl
+            });
+            this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+        }
+        else {
+            // Next question
+            room.aqCurrentQuestion = currentQ + 1;
+            room.currentRound = currentQ + 1;
+            const questions = (_b = room.aqShuffledQuestions) !== null && _b !== void 0 ? _b : autismQuiz_1.autismQuizQuestions;
+            const nextQuestion = questions[currentQ]; // 0-indexed, currentQ is already the next index
+            this.io.to(room.code).emit('aq_question', {
+                questionId: currentQ + 1,
+                questionText: nextQuestion.text,
+                questionNumber: currentQ + 1,
+                totalQuestions: 20
+            });
+            this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+            this.startAQTimer(room);
+            this.scheduleBotRun(room);
+        }
     }
     handleCreateRoom(socket, gameId) {
         const resolvedGameId = gameId !== null && gameId !== void 0 ? gameId : 'nasty-libs';
@@ -44,7 +164,7 @@ class GameManager {
         console.log(`Room created: ${roomCode} by ${socket.id}`);
     }
     handleJoin(socket, data) {
-        var _a, _b;
+        var _a, _b, _c, _d, _e, _f;
         const roomCode = String((_a = data === null || data === void 0 ? void 0 : data.roomCode) !== null && _a !== void 0 ? _a : '').trim().toUpperCase();
         const playerName = String((_b = data === null || data === void 0 ? void 0 : data.playerName) !== null && _b !== void 0 ? _b : '').trim();
         const isHost = Boolean(data === null || data === void 0 ? void 0 : data.isHost);
@@ -119,6 +239,36 @@ class GameManager {
         socket.join(roomCode);
         // Notify everyone in the room
         this.io.to(roomCode).emit('room_update', this.getRoomPublicState(room));
+        // If game is in AQ_QUESTION state, send the current question to the joining player
+        if (room.state === 'AQ_QUESTION' && room.aqCurrentQuestion) {
+            const questionIndex = room.aqCurrentQuestion - 1;
+            const questions = (_c = room.aqShuffledQuestions) !== null && _c !== void 0 ? _c : autismQuiz_1.autismQuizQuestions;
+            if (questionIndex >= 0 && questionIndex < questions.length) {
+                socket.emit('aq_question', {
+                    questionId: room.aqCurrentQuestion,
+                    questionText: questions[questionIndex].text,
+                    questionNumber: room.aqCurrentQuestion,
+                    totalQuestions: 20
+                });
+            }
+        }
+        // If game is in AQ_RESULTS state, send the results to the joining player
+        if (room.state === 'AQ_RESULTS' && room.aqScores) {
+            const rankings = Object.entries(room.aqScores)
+                .map(([playerId, score]) => {
+                var _a;
+                const player = room.players.find(p => p.id === playerId);
+                return { id: playerId, name: (_a = player === null || player === void 0 ? void 0 : player.name) !== null && _a !== void 0 ? _a : 'Unknown', score };
+            })
+                .sort((a, b) => a.score - b.score);
+            const winner = rankings[0];
+            socket.emit('aq_results', {
+                rankings,
+                winnerId: (_d = winner === null || winner === void 0 ? void 0 : winner.id) !== null && _d !== void 0 ? _d : '',
+                winnerName: (_e = winner === null || winner === void 0 ? void 0 : winner.name) !== null && _e !== void 0 ? _e : '',
+                certificate: (0, autismQuiz_1.generateCertificateSVG)((_f = winner === null || winner === void 0 ? void 0 : winner.name) !== null && _f !== void 0 ? _f : 'Unknown', rankings)
+            });
+        }
     }
     handleCloseRoom(socket) {
         const roomCode = this.socketRoomMap.get(socket.id);
@@ -171,8 +321,45 @@ class GameManager {
             case 'SUBMIT_ANSWER':
                 this.handleAnswer(room, socket.id, data.answer);
                 break;
+            case 'SUBMIT_DRAWING':
+                this.handleSubmitDrawing(room, socket.id, data.drawing, data.title);
+                break;
+            case 'INVEST':
+                this.handleInvest(room, socket.id, data.amount);
+                break;
             case 'SUBMIT_VOTE':
                 this.handleVote(room, socket.id, data.voteIndex);
+                break;
+            case 'AQ_ANSWER':
+                this.handleAQAnswer(room, socket.id, data.questionId, data.agreed);
+                break;
+            case 'SC_SET_ROUNDS':
+                if (this.isControllerSocket(room, socket.id) && room.state === 'LOBBY') {
+                    room.scRoundsPerPlayer = Math.min(3, Math.max(1, data.rounds || 1));
+                    this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+                }
+                break;
+            case 'SC_SET_TIMER':
+                if (this.isControllerSocket(room, socket.id) && room.state === 'LOBBY') {
+                    const validDurations = [60, 90, 120, 150];
+                    room.scRoundDuration = validDurations.includes(data.duration) ? data.duration : 60;
+                    this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+                }
+                break;
+            case 'SC_PICK_WORD':
+                this.handleSCPickWord(room, socket.id, data.word);
+                break;
+            case 'SC_GUESS':
+                this.handleSCGuess(room, socket.id, data.guess);
+                break;
+            case 'SC_DRAW_STROKE':
+                this.handleSCDrawStroke(room, socket.id, data.stroke);
+                break;
+            case 'SC_CLEAR_CANVAS':
+                this.handleSCClearCanvas(room, socket.id);
+                break;
+            case 'SC_REVEAL_HINT':
+                this.handleSCRevealHint(room, socket.id);
                 break;
             case 'NEXT_ROUND':
                 if (this.isControllerSocket(room, socket.id)) {
@@ -221,11 +408,22 @@ class GameManager {
     addBot(room) {
         if (room.state !== 'LOBBY')
             return;
+        // Scribble Scrabble doesn't support bots
+        if (room.gameId === 'scribble-scrabble') {
+            const controller = room.players.find(p => p.id === room.controllerPlayerId);
+            if (controller) {
+                this.io.to(controller.socketId).emit('error_message', { message: 'Scribble Scrabble does not support bots — humans only!' });
+            }
+            return;
+        }
         const botCount = room.players.filter(p => p.isBot).length;
         const id = (0, uuid_1.v4)();
+        const adj = ['Turbo', 'Mega', 'Silly', 'Quantum', 'Pocket', 'Mystic', 'Zippy', 'Wacky', 'Glitchy', 'Jolly'];
+        const noun = ['Toaster', 'Gizmo', 'Widget', 'Pal', 'Duck', 'Monkey', 'Gadget', 'Noodle', 'Wombat', 'Sprout'];
+        const name = `${this.pick(adj)} ${this.pick(noun)} (CPU)`;
         const bot = {
             id,
-            name: `CPU ${botCount + 1}`,
+            name,
             socketId: `bot:${id}`,
             score: 0,
             isConnected: true,
@@ -272,9 +470,16 @@ class GameManager {
             }
         });
     }
+    // Helper to add human-like random delay (1-5 seconds)
+    humanDelay() {
+        return __awaiter(this, arguments, void 0, function* (minMs = 1000, maxMs = 5000) {
+            const delay = minMs + Math.random() * (maxMs - minMs);
+            return new Promise(resolve => setTimeout(resolve, delay));
+        });
+    }
     runBots(room) {
         return __awaiter(this, void 0, void 0, function* () {
-            var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m;
+            var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r;
             const bots = this.getActivePlayers(room).filter(p => p.isBot);
             if (bots.length === 0)
                 return;
@@ -288,7 +493,10 @@ class GameManager {
                         const already = (_b = room.nastyPromptSubmissions) === null || _b === void 0 ? void 0 : _b.some(p => p.playerId === bot.id);
                         if (already)
                             continue;
-                        // IMPORTANT: Bot logic fix - ensure they submit
+                        // Human-like delay before submitting
+                        yield this.humanDelay(2000, 8000);
+                        if (room.state !== 'NL_PROMPT_SUBMIT')
+                            break;
                         const prompt = yield this.generateBotPrompt('nasty_prompt');
                         this.handleSubmitPrompt(room, bot.socketId, prompt);
                     }
@@ -303,7 +511,10 @@ class GameManager {
                         const already = room.answers.some(a => a.playerId === bot.id);
                         if (already)
                             continue;
-                        // IMPORTANT: Bot logic fix - ensure they submit
+                        // Human-like delay - "thinking" of a funny answer
+                        yield this.humanDelay(3000, 12000);
+                        if (room.state !== 'NL_ANSWER')
+                            break;
                         const answer = yield this.generateBotPrompt('nasty_answer', (_d = room.promptText) !== null && _d !== void 0 ? _d : '');
                         this.handleAnswer(room, bot.socketId, answer);
                     }
@@ -315,6 +526,10 @@ class GameManager {
                         const already = (_e = room.votedBy) === null || _e === void 0 ? void 0 : _e[bot.socketId];
                         if (already)
                             continue;
+                        // Human-like delay - reading options
+                        yield this.humanDelay(2000, 6000);
+                        if (room.state !== 'NL_VOTING')
+                            break;
                         const ownIndex = room.answers.findIndex(a => a.playerId === bot.id);
                         const options = room.answers.map((_, idx) => idx).filter(i => i !== ownIndex);
                         if (options.length === 0)
@@ -332,6 +547,10 @@ class GameManager {
                     const already = Boolean((_f = room.dpProblemsByPlayer) === null || _f === void 0 ? void 0 : _f[bot.id]);
                     if (already)
                         continue;
+                    // Human-like delay - thinking of problems
+                    yield this.humanDelay(3000, 10000);
+                    if (room.state !== 'DP_PROBLEM_SUBMIT')
+                        break;
                     const p1 = yield this.generateBotPrompt('dp_problem');
                     const p2 = yield this.generateBotPrompt('dp_problem');
                     const p3 = yield this.generateBotPrompt('dp_problem');
@@ -345,6 +564,10 @@ class GameManager {
                     const already = Boolean((_g = room.dpSelectedByPlayer) === null || _g === void 0 ? void 0 : _g[bot.id]);
                     if (already)
                         continue;
+                    // Human-like delay - reading choices
+                    yield this.humanDelay(2000, 5000);
+                    if (room.state !== 'DP_PICK')
+                        break;
                     const choices = (_j = (_h = room.dpChoicesByPlayer) === null || _h === void 0 ? void 0 : _h[bot.id]) !== null && _j !== void 0 ? _j : [];
                     const pick = choices[Math.floor(Math.random() * choices.length)];
                     if (!pick)
@@ -352,70 +575,129 @@ class GameManager {
                     this.handleSelectProblem(room, bot.socketId, pick);
                 }
             }
-            if (room.state === 'DP_ANSWER') {
+            if (room.state === 'DP_DRAWING') {
                 for (const bot of bots) {
-                    if (room.state !== 'DP_ANSWER')
+                    if (room.state !== 'DP_DRAWING')
                         break;
-                    const already = room.answers.some(a => a.playerId === bot.id);
+                    const already = (_k = room.dpDrawings) === null || _k === void 0 ? void 0 : _k[bot.id];
                     if (already)
                         continue;
-                    const problem = (_l = (_k = room.dpSelectedByPlayer) === null || _k === void 0 ? void 0 : _k[bot.id]) !== null && _l !== void 0 ? _l : 'A problem.';
-                    const answer = yield this.generateBotPrompt('dp_answer', problem);
-                    this.handleAnswer(room, bot.socketId, answer);
+                    // Human-like delay - "drawing" takes time
+                    yield this.humanDelay(5000, 15000);
+                    if (room.state !== 'DP_DRAWING')
+                        break;
+                    const problem = (_m = (_l = room.dpSelectedByPlayer) === null || _l === void 0 ? void 0 : _l[bot.id]) !== null && _m !== void 0 ? _m : 'A problem.';
+                    const title = yield this.generateBotPrompt('dp_answer', problem);
+                    // Generate a visible SVG placeholder with shapes and bot info
+                    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400">
+          <rect width="100%" height="100%" fill="#fff8e1"/>
+          <rect x="50" y="80" width="500" height="200" fill="#e0e0e0" stroke="#333" stroke-width="3" rx="20"/>
+          <circle cx="150" cy="180" r="50" fill="#4CAF50"/>
+          <circle cx="300" cy="180" r="50" fill="#2196F3"/>
+          <circle cx="450" cy="180" r="50" fill="#FF9800"/>
+          <line x1="150" y1="180" x2="300" y2="180" stroke="#333" stroke-width="4"/>
+          <line x1="300" y1="180" x2="450" y2="180" stroke="#333" stroke-width="4"/>
+          <text x="300" y="320" text-anchor="middle" font-size="22" font-weight="bold" fill="#333">${this.escapeXml(title.slice(0, 45))}</text>
+          <text x="300" y="360" text-anchor="middle" font-size="16" fill="#666">by ${this.escapeXml(bot.name)}</text>
+        </svg>`;
+                    const drawing = `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
+                    this.handleSubmitDrawing(room, bot.socketId, drawing, title);
                 }
             }
-            if (room.state === 'DP_VOTING') {
+            if (room.state === 'DP_INVESTING') {
                 for (const bot of bots) {
-                    if (room.state !== 'DP_VOTING')
+                    if (room.state !== 'DP_INVESTING')
                         break;
-                    const already = (_m = room.votedBy) === null || _m === void 0 ? void 0 : _m[bot.socketId];
+                    if (bot.id === room.currentPresenterId)
+                        continue;
+                    const already = (_o = room.currentInvestments) === null || _o === void 0 ? void 0 : _o[bot.id];
+                    if (already !== undefined)
+                        continue;
+                    // Human-like delay - "considering" the investment
+                    yield this.humanDelay(2000, 8000);
+                    if (room.state !== 'DP_INVESTING')
+                        break;
+                    // Smarter investing - invest more on earlier presentations, less on later ones
+                    // Also add some randomness to feel more human
+                    const max = bot.score;
+                    const basePercent = 0.1 + Math.random() * 0.4; // 10-50% base
+                    const amount = Math.floor(max * basePercent);
+                    this.handleInvest(room, bot.socketId, amount);
+                }
+            }
+            // Autism Assessment - bots answer questions
+            if (room.state === 'AQ_QUESTION') {
+                const currentQ = (_p = room.aqCurrentQuestion) !== null && _p !== void 0 ? _p : 1;
+                for (const bot of bots) {
+                    if (room.state !== 'AQ_QUESTION')
+                        break;
+                    // Check if bot already answered this question
+                    const already = ((_r = (_q = room.aqAnswers) === null || _q === void 0 ? void 0 : _q[bot.id]) === null || _r === void 0 ? void 0 : _r[currentQ]) !== undefined;
                     if (already)
                         continue;
-                    const ownIndex = room.answers.findIndex(a => a.playerId === bot.id);
-                    const options = room.answers.map((_, idx) => idx).filter(i => i !== ownIndex);
-                    if (options.length === 0)
-                        continue;
-                    const pick = options[Math.floor(Math.random() * options.length)];
-                    this.handleVote(room, bot.socketId, pick);
+                    // Human-like delay - "reading" and "thinking" about the question
+                    yield this.humanDelay(1500, 5000);
+                    if (room.state !== 'AQ_QUESTION')
+                        break;
+                    // Random answer - bots are unpredictable (can also pick neutral)
+                    const rand = Math.random();
+                    const agreed = rand < 0.33 ? true : rand < 0.66 ? false : 'neutral';
+                    this.handleAQAnswer(room, bot.socketId, currentQ, agreed);
                 }
             }
         });
     }
     generateBotPrompt(kind, context) {
         return __awaiter(this, void 0, void 0, function* () {
+            var _a;
             const fromApi = yield this.tryBotApi(kind, context);
             if (fromApi)
                 return fromApi;
             if (kind === 'nasty_prompt') {
-                const templates = [
-                    'The worst thing to say at a wedding is ____.',
-                    'My new job title is officially “____.”',
-                    'I knew it was a bad idea when the label said “____.”',
-                    'Tonight’s dinner: ____ with a side of ____.',
-                    'The first rule of my secret club is ____.'
-                ];
-                return templates[Math.floor(Math.random() * templates.length)];
+                // Use the imported nasty prompts list
+                return this.pick(nastyPrompts_1.nastyPrompts);
             }
             if (kind === 'dp_problem') {
                 const templates = [
-                    'I can’t stop losing my keys.',
-                    'My group chats never stop buzzing.',
-                    'My socks keep disappearing in the laundry.',
-                    'I always spill drinks at the worst time.',
-                    'I can’t remember why I walked into a room.'
+                    "I can't stop losing my keys.",
+                    "My group chats never stop buzzing.",
+                    "My socks keep disappearing in the laundry.",
+                    "I always spill drinks at the worst time.",
+                    "I can't remember why I walked into a room.",
+                    "My neighbor plays loud music at 3am.",
+                    "I always forget people's names immediately.",
+                    "My phone battery dies at the worst moments.",
+                    "I can never find matching Tupperware lids.",
+                    "I keep getting spam calls during meetings."
                 ];
-                return templates[Math.floor(Math.random() * templates.length)];
+                return this.pick(templates);
             }
             if (kind === 'nasty_answer') {
-                const templates = ['a tactical nap', 'too much confidence', 'my evil twin', 'free samples', 'the vibe check'];
-                return templates[Math.floor(Math.random() * templates.length)];
+                // Use the imported nasty answers list
+                return this.pick(nastyPrompts_1.nastyAnswers);
             }
-            const templates = [
-                `Introducing the ${this.pick(['Auto', 'Mega', 'Ultra', 'Pocket', 'Turbo'])}${this.pick(['Buddy', 'Gizmo', 'Helper', 'Pal', 'Wizard'])}: it fixes it instantly, probably.`,
-                `Behold my invention: a wearable solution that handles it while you pretend you meant to.`,
-                `My invention solves it by politely asking it to stop. Somehow it works.`
-            ];
-            return templates[Math.floor(Math.random() * templates.length)];
+            // dp_answer - invention titles for Dubiously Patented
+            const prefix = this.pick(['The', 'My', 'Introducing:', 'Behold!', 'Patent Pending:', '']);
+            const adj = this.pick(['Turbo', 'Mega', 'Ultra', 'Quantum', 'Pocket', 'Self-Aware', 'Artisanal', 'Blockchain', 'AI-Powered', 'Organic', 'Military-Grade', 'Sentient', 'Tactical', 'Moisturized', 'Forbidden']);
+            const noun = this.pick(['Buddy', 'Gizmo', '3000', 'Pro Max', 'Deluxe', 'Helper', 'Solution', '-Matic', 'Blaster', 'Eliminator', 'Wizard', 'Master', 'Destroyer']);
+            const core = this.pick([
+                `${adj} Problem ${noun}`,
+                `${adj} ${noun}`,
+                `${adj} Life ${noun}`,
+                `${this.pick(['Auto', 'Robo', 'Smart', 'E-'])}${this.pick(['Fix', 'Solve', 'Helper', 'Buddy'])} ${noun}`,
+                `The "${(_a = context === null || context === void 0 ? void 0 : context.slice(0, 20)) !== null && _a !== void 0 ? _a : 'Problem'}" ${noun}`
+            ]);
+            const suffix = this.pick([
+                ' - It just works!',
+                ' (patent pending)',
+                ' - Problem solved!',
+                ' - Trust me bro.',
+                ' - What could go wrong?',
+                '',
+                ' - As seen on TV!',
+                ' - Now with extra features!'
+            ]);
+            return `${prefix} ${core}${suffix}`.replace(/\s+/g, ' ').trim();
         });
     }
     pick(items) {
@@ -479,10 +761,12 @@ class GameManager {
     }
     startGame(room) {
         let activePlayers = this.getActivePlayers(room);
-        // Auto-fill bots if less than 4 players
-        while (activePlayers.length < 4) {
-            this.addBot(room);
-            activePlayers = this.getActivePlayers(room);
+        // Auto-fill bots if less than 4 players (skip for autism quiz and scribble scrabble - no bots)
+        if (room.gameId !== 'autism-assessment' && room.gameId !== 'scribble-scrabble') {
+            while (activePlayers.length < 4) {
+                this.addBot(room);
+                activePlayers = this.getActivePlayers(room);
+            }
         }
         room.answers = [];
         room.votes = {};
@@ -493,6 +777,38 @@ class GameManager {
             this.startNastyRound(room);
             return;
         }
+        if (room.gameId === 'autism-assessment') {
+            room.totalRounds = 20; // 20 questions
+            room.currentRound = 1;
+            room.aqCurrentQuestion = 1;
+            room.aqAnswers = {};
+            room.aqScores = {};
+            // Shuffle all questions and pick the first 20 for this game (no duplicates possible)
+            const shuffled = [...autismQuiz_1.autismQuizQuestions].sort(() => Math.random() - 0.5);
+            room.aqShuffledQuestions = shuffled.slice(0, 20);
+            // Initialize answer tracking for all players
+            for (const p of activePlayers) {
+                room.aqAnswers[p.id] = {};
+            }
+            room.state = 'AQ_QUESTION';
+            this.io.to(room.code).emit('game_started');
+            this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+            this.io.to(room.code).emit('aq_question', {
+                questionId: 1,
+                questionText: room.aqShuffledQuestions[0].text,
+                questionNumber: 1,
+                totalQuestions: 20
+            });
+            this.startAQTimer(room);
+            this.scheduleBotRun(room);
+            return;
+        }
+        if (room.gameId === 'scribble-scrabble') {
+            this.startScribbleScrabble(room);
+            return;
+        }
+        // Initialize money for Dubiously Patented
+        room.players.forEach(p => { p.score = 1000; });
         room.totalRounds = 1;
         room.currentRound = 1;
         room.state = 'DP_PROBLEM_SUBMIT';
@@ -523,7 +839,7 @@ class GameManager {
         this.scheduleBotRun(room);
     }
     handleSubmitPrompt(room, socketId, promptText) {
-        var _a, _b;
+        var _a, _b, _c;
         if (room.gameId !== 'nasty-libs')
             return;
         if (room.state !== 'NL_PROMPT_SUBMIT')
@@ -545,8 +861,13 @@ class GameManager {
         const audienceCount = Math.max(0, activePlayers.length - 2);
         if (room.nastyPromptSubmissions.length < audienceCount)
             return;
-        const selected = room.nastyPromptSubmissions[Math.floor(Math.random() * room.nastyPromptSubmissions.length)];
-        room.promptText = selected.prompt;
+        // Mix audience-submitted prompts with default prompts, then select randomly
+        const pool = [
+            ...(((_c = room.nastyPromptSubmissions) !== null && _c !== void 0 ? _c : []).map(p => p.prompt)),
+            ...nastyPrompts_1.nastyPrompts.slice(0, 10) // Include some default prompts
+        ];
+        const selectedPrompt = pool[Math.floor(Math.random() * pool.length)];
+        room.promptText = selectedPrompt;
         room.state = 'NL_ANSWER';
         room.answers = [];
         room.votes = {};
@@ -637,10 +958,9 @@ class GameManager {
         const activePlayers = this.getActivePlayers(room);
         if (Object.keys(room.dpSelectedByPlayer).length < activePlayers.length)
             return;
-        room.state = 'DP_ANSWER';
-        room.answers = [];
-        room.votes = {};
-        room.votedBy = {};
+        room.state = 'DP_DRAWING';
+        room.answers = []; // Used for titles
+        room.dpDrawings = {};
         for (const p of activePlayers) {
             const prompt = room.dpSelectedByPlayer[p.id];
             if (prompt && p.socketId) {
@@ -648,18 +968,187 @@ class GameManager {
                     prompt,
                     gameId: room.gameId,
                     round: room.currentRound,
-                    timeLimit: 90
+                    timeLimit: 180 // More time for drawing
                 });
             }
         }
         this.io.to(room.hostSocketId).emit('new_prompt', {
-            prompt: 'Players are pitching inventions...',
+            prompt: 'Players are drawing their inventions...',
             gameId: room.gameId,
             round: room.currentRound,
-            timeLimit: 90
+            timeLimit: 180
         });
         this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
         this.scheduleBotRun(room);
+    }
+    handleSubmitDrawing(room, socketId, drawing, title) {
+        var _a, _b;
+        if (room.gameId !== 'dubiously-patented')
+            return;
+        if (room.state !== 'DP_DRAWING')
+            return;
+        const player = room.players.find(p => p.socketId === socketId);
+        if (!player)
+            return;
+        (_a = room.dpDrawings) !== null && _a !== void 0 ? _a : (room.dpDrawings = {});
+        if (room.dpDrawings[player.id])
+            return; // Already submitted
+        // Debug logging
+        console.log(`[DP] Storing drawing for ${player.name} (${player.id}), isBot: ${player.isBot}`);
+        console.log(`[DP] Drawing length: ${(_b = drawing === null || drawing === void 0 ? void 0 : drawing.length) !== null && _b !== void 0 ? _b : 0}, starts with: ${drawing === null || drawing === void 0 ? void 0 : drawing.substring(0, 50)}`);
+        room.dpDrawings[player.id] = drawing || ''; // Base64 string
+        // Store title as "answer" for consistency or separate field
+        room.answers.push({ playerId: player.id, answer: title || 'Untitled Invention' });
+        this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+        const activePlayers = this.getActivePlayers(room);
+        if (Object.keys(room.dpDrawings).length < activePlayers.length)
+            return;
+        // Start presentations
+        room.presentationOrder = activePlayers.map(p => p.id).sort(() => 0.5 - Math.random());
+        this.startPresentation(room);
+    }
+    startPresentation(room) {
+        var _a, _b;
+        if (!room.presentationOrder || room.presentationOrder.length === 0) {
+            this.showResults(room);
+            return;
+        }
+        const nextId = room.presentationOrder.pop();
+        room.currentPresenterId = nextId;
+        room.state = 'DP_PRESENTING';
+        room.currentInvestments = {};
+        // Debug logging for presentation
+        const presentationDrawing = room.dpDrawings ? room.dpDrawings[nextId || ''] : undefined;
+        const presenter = room.players.find(p => p.id === nextId);
+        console.log(`[DP] Starting presentation for ${presenter === null || presenter === void 0 ? void 0 : presenter.name} (${nextId}), isBot: ${presenter === null || presenter === void 0 ? void 0 : presenter.isBot}`);
+        console.log(`[DP] Drawing available: ${!!presentationDrawing}, length: ${(_a = presentationDrawing === null || presentationDrawing === void 0 ? void 0 : presentationDrawing.length) !== null && _a !== void 0 ? _a : 0}`);
+        this.io.to(room.code).emit('start_presentation', {
+            presenterId: nextId,
+            timeLimit: 60,
+            drawing: presentationDrawing,
+            answer: room.answers ? (_b = room.answers.find(a => a.playerId === nextId)) === null || _b === void 0 ? void 0 : _b.answer : undefined,
+            prompt: room.dpSelectedByPlayer ? room.dpSelectedByPlayer[nextId || ''] : undefined
+        });
+        this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+        // Auto-advance after 60s (handled by client timer mostly, but good to have server enforcement if needed)
+        // For now, rely on manual "Next" or just let the client timer run out and host triggers? 
+        // Better: Set a timeout or let the host trigger "Next Phase". 
+        // User said "have a minute each". 
+        // Let's implement auto-transition to Investing after 60s.
+        setTimeout(() => {
+            if (room.state === 'DP_PRESENTING' && room.currentPresenterId === nextId) {
+                this.startInvesting(room);
+            }
+        }, 60000);
+    }
+    startInvesting(room) {
+        room.state = 'DP_INVESTING';
+        this.io.to(room.code).emit('start_investing', {
+            presenterId: room.currentPresenterId,
+            timeLimit: 30
+        });
+        this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+        this.scheduleBotRun(room);
+        // Capture the presenter at the time investing starts to avoid races
+        const investingPresenter = room.currentPresenterId;
+        setTimeout(() => {
+            if (room.state === 'DP_INVESTING' && room.currentPresenterId === investingPresenter) {
+                this.startPresentation(room);
+            }
+        }, 30000);
+    }
+    handleInvest(room, socketId, amount) {
+        var _a;
+        if (room.state !== 'DP_INVESTING')
+            return;
+        const player = room.players.find(p => p.socketId === socketId);
+        if (!player)
+            return;
+        if (player.id === room.currentPresenterId)
+            return; // Can't invest in self (or maybe you can? User didn't say. Assuming no.)
+        const investment = Math.max(0, Math.min(Number(amount) || 0, player.score));
+        (_a = room.currentInvestments) !== null && _a !== void 0 ? _a : (room.currentInvestments = {});
+        if (room.currentInvestments[player.id])
+            return; // Already invested
+        room.currentInvestments[player.id] = investment;
+        // Deduct immediately or at end? 
+        // "Other players can choose to invest a certain amount... whoever has most money wins"
+        // If I invest 100, I lose 100. The presenter gains 100? 
+        // Or is it a vote? "Invest" implies transfer.
+        // Let's transfer immediately.
+        player.score -= investment;
+        const presenter = room.players.find(p => p.id === room.currentPresenterId);
+        if (presenter) {
+            presenter.score += investment;
+        }
+        this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+        // Check if everyone (except presenter) has invested
+        const activePlayers = this.getActivePlayers(room);
+        const potentialInvestors = activePlayers.filter(p => p.id !== room.currentPresenterId).length;
+        if (Object.keys(room.currentInvestments).length >= potentialInvestors) {
+            // All investors have submitted — advance immediately to the next presentation
+            this.startPresentation(room);
+        }
+    }
+    handleAQAnswer(room, socketId, questionId, agreed) {
+        var _a, _b, _c;
+        var _d, _e;
+        if (room.gameId !== 'autism-assessment')
+            return;
+        if (room.state !== 'AQ_QUESTION')
+            return;
+        const player = room.players.find(p => p.socketId === socketId);
+        if (!player)
+            return;
+        (_a = room.aqAnswers) !== null && _a !== void 0 ? _a : (room.aqAnswers = {});
+        (_b = (_d = room.aqAnswers)[_e = player.id]) !== null && _b !== void 0 ? _b : (_d[_e] = {});
+        // Don't allow re-answering same question
+        if (room.aqAnswers[player.id][questionId] !== undefined)
+            return;
+        room.aqAnswers[player.id][questionId] = agreed;
+        this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+        // Check if all players have answered the current question
+        const activePlayers = this.getActivePlayers(room);
+        const currentQ = (_c = room.aqCurrentQuestion) !== null && _c !== void 0 ? _c : 1;
+        const allAnswered = activePlayers.every(p => { var _a, _b; return ((_b = (_a = room.aqAnswers) === null || _a === void 0 ? void 0 : _a[p.id]) === null || _b === void 0 ? void 0 : _b[currentQ]) !== undefined; });
+        if (!allAnswered)
+            return;
+        // Everyone answered - clear timer and advance
+        this.clearAQTimer(room.code);
+        this.advanceAQQuestion(room);
+    }
+    calculateAQScores(room) {
+        var _a, _b, _c;
+        room.aqScores = {};
+        const activePlayers = this.getActivePlayers(room);
+        const questions = (_a = room.aqShuffledQuestions) !== null && _a !== void 0 ? _a : autismQuiz_1.autismQuizQuestions;
+        for (const player of activePlayers) {
+            let score = 0;
+            const answers = (_c = (_b = room.aqAnswers) === null || _b === void 0 ? void 0 : _b[player.id]) !== null && _c !== void 0 ? _c : {};
+            // Iterate through questions by their position (1-20), matching the questionId we sent
+            for (let i = 0; i < questions.length; i++) {
+                const question = questions[i];
+                const questionId = i + 1; // We use 1-based questionIds
+                const agreed = answers[questionId];
+                if (agreed === undefined)
+                    continue;
+                // Timeout penalty - counts as 1 point towards autism score
+                if (agreed === 'timeout') {
+                    score++;
+                    continue;
+                }
+                // Neutral answer - half point
+                if (agreed === 'neutral') {
+                    score += 0.5;
+                    continue;
+                }
+                // Score increases when answer matches the "autistic" pattern
+                if ((agreed && question.agreeIsAutistic) || (!agreed && !question.agreeIsAutistic)) {
+                    score++;
+                }
+            }
+            room.aqScores[player.id] = score;
+        }
     }
     handleAnswer(room, socketId, answerText) {
         var _a;
@@ -690,32 +1179,20 @@ class GameManager {
             this.scheduleBotRun(room);
             return;
         }
-        if (room.state !== 'DP_ANSWER')
-            return;
-        if (room.answers.some(a => a.playerId === player.id))
-            return;
-        room.answers.push({ playerId: player.id, answer });
-        const activePlayers = this.getActivePlayers(room);
-        if (room.answers.length < activePlayers.length)
-            return;
-        room.state = 'DP_VOTING';
-        room.votes = {};
-        room.votedBy = {};
-        this.io.to(room.code).emit('start_voting', {
-            answers: room.answers.map(a => a.answer),
-            timeLimit: 30
-        });
-        this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
-        this.scheduleBotRun(room);
     }
     handleVote(room, socketId, voteIndex) {
-        var _a, _b;
-        if (room.state !== 'NL_VOTING' && room.state !== 'DP_VOTING')
+        var _a, _b, _c, _d, _e;
+        if (room.state !== 'NL_VOTING')
             return;
         const player = room.players.find(p => p.socketId === socketId);
         if (!player)
             return;
-        (_a = room.votedBy) !== null && _a !== void 0 ? _a : (room.votedBy = {});
+        // Fix: Nasty Libs contestants cannot vote
+        if (room.gameId === 'nasty-libs' && ((_a = room.nastyContestantIds) === null || _a === void 0 ? void 0 : _a.includes(player.id))) {
+            this.io.to(socketId).emit('error', { message: "You are a contestant and cannot vote!" });
+            return;
+        }
+        (_b = room.votedBy) !== null && _b !== void 0 ? _b : (room.votedBy = {});
         if (room.votedBy[socketId])
             return;
         const index = Number(voteIndex);
@@ -723,23 +1200,30 @@ class GameManager {
             return;
         if (index < 0 || index >= room.answers.length)
             return;
-        // Prevent self-voting
-        if (((_b = room.answers[index]) === null || _b === void 0 ? void 0 : _b.playerId) === player.id) {
+        // Prevent self-voting (redundant if contestants excluded, but good for safety)
+        if (((_c = room.answers[index]) === null || _c === void 0 ? void 0 : _c.playerId) === player.id) {
             this.io.to(socketId).emit('error', { message: "You can't vote for yourself!", code: 'GAME_ERROR' });
             return;
         }
         room.votedBy[socketId] = true;
         room.votes[index] = (room.votes[index] || 0) + 1;
         const activePlayers = this.getActivePlayers(room);
+        // In Nasty Libs, contestants don't vote. So total votes needed = players - 2.
+        const expectedVotes = Math.max(0, activePlayers.length - ((_e = (_d = room.nastyContestantIds) === null || _d === void 0 ? void 0 : _d.length) !== null && _e !== void 0 ? _e : 0));
         const totalVotes = Object.values(room.votes).reduce((a, b) => a + b, 0);
-        if (totalVotes < activePlayers.length)
+        if (totalVotes < expectedVotes)
             return;
         this.showResults(room);
     }
     showResults(room) {
-        if (room.state !== 'NL_VOTING' && room.state !== 'DP_VOTING')
+        // For Dubiously Patented, end the game after presentations/investing
+        if (room.gameId === 'dubiously-patented') {
+            this.endGame(room);
             return;
-        room.state = room.gameId === 'nasty-libs' ? 'NL_RESULTS' : 'DP_RESULTS';
+        }
+        if (room.state !== 'NL_VOTING' && room.state !== 'DP_PRESENTING')
+            return;
+        room.state = 'NL_RESULTS';
         const roundResults = room.answers.map((a, index) => {
             const votes = room.votes[index] || 0;
             const player = room.players.find(p => p.id === a.playerId);
@@ -766,6 +1250,18 @@ class GameManager {
                 return;
             }
             this.startNastyRound(room);
+            return;
+        }
+        if (room.gameId === 'autism-assessment') {
+            if (room.state !== 'AQ_RESULTS')
+                return;
+            this.endGame(room);
+            return;
+        }
+        if (room.gameId === 'scribble-scrabble') {
+            if (room.state !== 'SC_ROUND_RESULTS')
+                return;
+            this.advanceSCRound(room);
             return;
         }
         if (room.state !== 'DP_RESULTS')
@@ -797,8 +1293,265 @@ class GameManager {
         }
         return (0, uuid_1.v4)().slice(0, 4).toUpperCase();
     }
+    // ==================== SCRIBBLE SCRABBLE METHODS ====================
+    startScribbleScrabble(room) {
+        var _a, _b;
+        const activePlayers = this.getActivePlayers(room);
+        // Initialize settings with defaults if not set in lobby
+        room.scRoundsPerPlayer = (_a = room.scRoundsPerPlayer) !== null && _a !== void 0 ? _a : 1;
+        room.scRoundDuration = (_b = room.scRoundDuration) !== null && _b !== void 0 ? _b : 60;
+        // Create drawer order (shuffle players, repeat for rounds per player)
+        const shuffledPlayers = [...activePlayers].sort(() => Math.random() - 0.5);
+        room.scDrawerOrder = [];
+        for (let i = 0; i < room.scRoundsPerPlayer; i++) {
+            room.scDrawerOrder.push(...shuffledPlayers.map(p => p.id));
+        }
+        room.scTotalRounds = room.scDrawerOrder.length;
+        room.scCurrentRound = 1;
+        room.scScores = {};
+        // Initialize scores
+        for (const p of activePlayers) {
+            room.scScores[p.id] = 0;
+        }
+        this.io.to(room.code).emit('game_started');
+        this.startSCRound(room);
+    }
+    startSCRound(room) {
+        var _a, _b;
+        const roundIndex = ((_a = room.scCurrentRound) !== null && _a !== void 0 ? _a : 1) - 1;
+        const drawerId = (_b = room.scDrawerOrder) === null || _b === void 0 ? void 0 : _b[roundIndex];
+        if (!drawerId) {
+            this.endScribbleScrabble(room);
+            return;
+        }
+        room.scDrawerId = drawerId;
+        room.scWord = undefined;
+        room.scRevealedIndices = [];
+        room.scCorrectGuessers = [];
+        room.scDrawingStrokes = [];
+        room.scGuessChat = [];
+        room.scWordOptions = (0, scribbleWords_1.generateWordOptions)();
+        room.state = 'SC_WORD_PICK';
+        // Send word options only to the drawer
+        const drawer = room.players.find(p => p.id === drawerId);
+        if (drawer) {
+            this.io.to(drawer.socketId).emit('sc_word_options', { words: room.scWordOptions });
+        }
+        this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+    }
+    handleSCPickWord(room, socketId, word) {
+        var _a, _b;
+        if (room.gameId !== 'scribble-scrabble')
+            return;
+        if (room.state !== 'SC_WORD_PICK')
+            return;
+        const player = room.players.find(p => p.socketId === socketId);
+        if (!player || player.id !== room.scDrawerId)
+            return;
+        // Validate word is one of the options
+        if (!((_a = room.scWordOptions) === null || _a === void 0 ? void 0 : _a.includes(word)))
+            return;
+        room.scWord = word;
+        room.scRoundTime = (_b = room.scRoundDuration) !== null && _b !== void 0 ? _b : 60;
+        room.state = 'SC_DRAWING';
+        this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+        this.startSCTimer(room);
+    }
+    handleSCGuess(room, socketId, guess) {
+        var _a, _b, _c, _d, _e, _f, _g, _h;
+        if (room.gameId !== 'scribble-scrabble')
+            return;
+        if (room.state !== 'SC_DRAWING')
+            return;
+        if (!room.scWord)
+            return;
+        const player = room.players.find(p => p.socketId === socketId);
+        if (!player)
+            return;
+        // Drawer can't guess
+        if (player.id === room.scDrawerId)
+            return;
+        // Can't guess if already got it correct
+        if ((_a = room.scCorrectGuessers) === null || _a === void 0 ? void 0 : _a.includes(player.id))
+            return;
+        const correct = (0, scribbleWords_1.isCorrectGuess)(guess, room.scWord);
+        const close = !correct && (0, scribbleWords_1.isCloseGuess)(guess, room.scWord);
+        // Add to chat
+        room.scGuessChat = (_b = room.scGuessChat) !== null && _b !== void 0 ? _b : [];
+        room.scGuessChat.push({
+            playerId: player.id,
+            playerName: player.name,
+            guess: correct ? '✓ Got it!' : guess, // Hide the actual word if correct
+            isCorrect: correct,
+            isClose: close,
+            timestamp: Date.now()
+        });
+        // Broadcast guess to everyone
+        this.io.to(room.code).emit('sc_guess_chat', {
+            playerId: player.id,
+            playerName: player.name,
+            guess: correct ? '✓ Got it!' : guess,
+            isCorrect: correct,
+            isClose: close
+        });
+        if (correct) {
+            room.scCorrectGuessers = (_c = room.scCorrectGuessers) !== null && _c !== void 0 ? _c : [];
+            room.scCorrectGuessers.push(player.id);
+            // Calculate points based on order and time remaining
+            const timeRemaining = (_d = room.scRoundTime) !== null && _d !== void 0 ? _d : 0;
+            const position = room.scCorrectGuessers.length;
+            const activePlayers = this.getActivePlayers(room);
+            const maxPoints = 1000;
+            // Points: faster = more, earlier position = more
+            const timeBonus = Math.floor((timeRemaining / ((_e = room.scRoundDuration) !== null && _e !== void 0 ? _e : 60)) * 500);
+            const positionMultiplier = Math.max(0.2, 1 - (position - 1) * 0.2);
+            const guesserPoints = Math.floor((maxPoints * positionMultiplier) + timeBonus);
+            // Drawer gets points for each correct guess
+            const drawerPoints = 100;
+            room.scScores = (_f = room.scScores) !== null && _f !== void 0 ? _f : {};
+            room.scScores[player.id] = ((_g = room.scScores[player.id]) !== null && _g !== void 0 ? _g : 0) + guesserPoints;
+            if (room.scDrawerId) {
+                room.scScores[room.scDrawerId] = ((_h = room.scScores[room.scDrawerId]) !== null && _h !== void 0 ? _h : 0) + drawerPoints;
+            }
+            // Notify of correct guess
+            this.io.to(room.code).emit('sc_correct_guess', {
+                playerId: player.id,
+                playerName: player.name,
+                points: guesserPoints
+            });
+            // Check if everyone has guessed (except drawer)
+            const nonDrawerPlayers = activePlayers.filter(p => p.id !== room.scDrawerId);
+            if (room.scCorrectGuessers.length >= nonDrawerPlayers.length) {
+                // Everyone guessed! End round early
+                this.clearSCTimer(room.code);
+                this.endSCRound(room);
+            }
+        }
+        this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+    }
+    handleSCDrawStroke(room, socketId, stroke) {
+        var _a;
+        if (room.gameId !== 'scribble-scrabble')
+            return;
+        if (room.state !== 'SC_DRAWING')
+            return;
+        const player = room.players.find(p => p.socketId === socketId);
+        if (!player || player.id !== room.scDrawerId)
+            return;
+        // Store stroke for late joiners/reconnects
+        room.scDrawingStrokes = (_a = room.scDrawingStrokes) !== null && _a !== void 0 ? _a : [];
+        room.scDrawingStrokes.push(stroke);
+        // Broadcast stroke to all clients immediately (real-time)
+        this.io.to(room.code).emit('sc_stroke_data', { stroke });
+    }
+    handleSCClearCanvas(room, socketId) {
+        if (room.gameId !== 'scribble-scrabble')
+            return;
+        if (room.state !== 'SC_DRAWING')
+            return;
+        const player = room.players.find(p => p.socketId === socketId);
+        if (!player || player.id !== room.scDrawerId)
+            return;
+        room.scDrawingStrokes = [];
+        this.io.to(room.code).emit('sc_clear_canvas');
+    }
+    handleSCRevealHint(room, socketId) {
+        var _a;
+        if (room.gameId !== 'scribble-scrabble')
+            return;
+        if (room.state !== 'SC_DRAWING')
+            return;
+        if (!room.scWord)
+            return;
+        const player = room.players.find(p => p.socketId === socketId);
+        if (!player || player.id !== room.scDrawerId)
+            return;
+        room.scRevealedIndices = (_a = room.scRevealedIndices) !== null && _a !== void 0 ? _a : [];
+        // Find unrevealed letter indices (skip spaces)
+        const unrevealedIndices = room.scWord
+            .split('')
+            .map((char, i) => ({ char, i }))
+            .filter(({ char, i }) => char !== ' ' && !room.scRevealedIndices.includes(i))
+            .map(({ i }) => i);
+        if (unrevealedIndices.length === 0)
+            return;
+        // Reveal a random letter
+        const randomIndex = unrevealedIndices[Math.floor(Math.random() * unrevealedIndices.length)];
+        room.scRevealedIndices.push(randomIndex);
+        this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+    }
+    startSCTimer(room) {
+        var _a;
+        this.clearSCTimer(room.code);
+        const startTime = Date.now();
+        const duration = (_a = room.scRoundDuration) !== null && _a !== void 0 ? _a : 60;
+        const tick = () => {
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            room.scRoundTime = Math.max(0, duration - elapsed);
+            // Broadcast time update
+            this.io.to(room.code).emit('sc_timer', { timeLeft: room.scRoundTime });
+            if (room.scRoundTime <= 0) {
+                this.clearSCTimer(room.code);
+                this.endSCRound(room);
+            }
+            else {
+                this.scTimers.set(room.code, setTimeout(tick, 1000));
+            }
+        };
+        this.scTimers.set(room.code, setTimeout(tick, 1000));
+    }
+    clearSCTimer(roomCode) {
+        const timer = this.scTimers.get(roomCode);
+        if (timer) {
+            clearTimeout(timer);
+            this.scTimers.delete(roomCode);
+        }
+    }
+    endSCRound(room) {
+        room.state = 'SC_ROUND_RESULTS';
+        // Reveal the word to everyone
+        this.io.to(room.code).emit('sc_round_end', {
+            word: room.scWord,
+            correctGuessers: room.scCorrectGuessers,
+            scores: room.scScores
+        });
+        this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+    }
+    advanceSCRound(room) {
+        var _a, _b;
+        room.scCurrentRound = ((_a = room.scCurrentRound) !== null && _a !== void 0 ? _a : 1) + 1;
+        if (room.scCurrentRound > ((_b = room.scTotalRounds) !== null && _b !== void 0 ? _b : 1)) {
+            this.endScribbleScrabble(room);
+        }
+        else {
+            this.startSCRound(room);
+        }
+    }
+    endScribbleScrabble(room) {
+        var _a;
+        room.state = 'END';
+        this.clearSCTimer(room.code);
+        // Calculate final rankings
+        const rankings = Object.entries((_a = room.scScores) !== null && _a !== void 0 ? _a : {})
+            .map(([playerId, score]) => {
+            var _a, _b;
+            return ({
+                playerId,
+                name: (_b = (_a = room.players.find(p => p.id === playerId)) === null || _a === void 0 ? void 0 : _a.name) !== null && _b !== void 0 ? _b : 'Unknown',
+                score
+            });
+        })
+            .sort((a, b) => b.score - a.score);
+        this.io.to(room.code).emit('sc_game_end', { rankings });
+        this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+    }
+    // ==================== END SCRIBBLE SCRABBLE METHODS ====================
     getRoomPublicState(room) {
-        var _a, _b, _c;
+        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
+        // Count how many players have answered the current AQ question
+        const aqAnsweredCount = room.aqCurrentQuestion && room.aqAnswers
+            ? Object.values(room.aqAnswers).filter(a => a[room.aqCurrentQuestion] !== undefined).length
+            : 0;
         return {
             code: room.code,
             gameId: room.gameId,
@@ -815,8 +1568,42 @@ class GameManager {
             promptSubmissions: (_c = (_b = room.nastyPromptSubmissions) === null || _b === void 0 ? void 0 : _b.length) !== null && _c !== void 0 ? _c : 0,
             problemsSubmitted: room.dpProblemsByPlayer ? Object.keys(room.dpProblemsByPlayer).length : 0,
             problemsTotal: this.getActivePlayers(room).length,
-            selectionsMade: room.dpSelectedByPlayer ? Object.keys(room.dpSelectedByPlayer).length : 0
+            selectionsMade: room.dpSelectedByPlayer ? Object.keys(room.dpSelectedByPlayer).length : 0,
+            drawingsSubmitted: room.dpDrawings ? Object.keys(room.dpDrawings).length : 0,
+            currentPresenter: room.currentPresenterId ? (_d = room.players.find(p => p.id === room.currentPresenterId)) === null || _d === void 0 ? void 0 : _d.name : undefined,
+            currentPresenterId: room.currentPresenterId,
+            currentDrawing: room.currentPresenterId && room.dpDrawings ? room.dpDrawings[room.currentPresenterId] : undefined,
+            currentTitle: room.currentPresenterId && room.answers ? (_e = room.answers.find(a => a.playerId === room.currentPresenterId)) === null || _e === void 0 ? void 0 : _e.answer : undefined,
+            currentProblem: room.currentPresenterId && room.dpSelectedByPlayer ? room.dpSelectedByPlayer[room.currentPresenterId] : undefined,
+            promptText: room.promptText,
+            currentInvestments: (_f = room.currentInvestments) !== null && _f !== void 0 ? _f : {},
+            // Autism Quiz fields
+            aqCurrentQuestion: room.aqCurrentQuestion,
+            aqAnsweredCount,
+            aqScores: room.aqScores,
+            // Scribble Scrabble fields
+            scDrawerId: room.scDrawerId,
+            scDrawerName: room.scDrawerId ? (_g = room.players.find(p => p.id === room.scDrawerId)) === null || _g === void 0 ? void 0 : _g.name : undefined,
+            scWordHint: room.scWord ? (0, scribbleWords_1.generateWordHint)(room.scWord, (_h = room.scRevealedIndices) !== null && _h !== void 0 ? _h : []) : undefined,
+            scRoundTime: room.scRoundTime,
+            scRoundDuration: (_j = room.scRoundDuration) !== null && _j !== void 0 ? _j : 60,
+            scRoundsPerPlayer: (_k = room.scRoundsPerPlayer) !== null && _k !== void 0 ? _k : 1,
+            scCurrentRound: room.scCurrentRound,
+            scTotalRounds: room.scTotalRounds,
+            scCorrectGuessers: room.scCorrectGuessers,
+            scScores: room.scScores,
+            scGuessChat: room.scGuessChat,
+            scDrawingStrokes: room.scDrawingStrokes
         };
+    }
+    // Escape XML to safely embed text in generated SVG
+    escapeXml(input) {
+        return String(input)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&apos;');
     }
 }
 exports.GameManager = GameManager;

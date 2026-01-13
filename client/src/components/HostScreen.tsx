@@ -439,11 +439,9 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
             <h1 className="text-6xl font-black text-pink-500 tracking-widest">{room.code}</h1>
             <div className="text-sm text-slate-500 mt-2 uppercase tracking-widest">Controller: {controllerName}</div>
         </div>
-        {room.state === 'LOBBY' && (
-          <WoodenButton variant="wood" onClick={handleBack} className="px-6 py-2 text-lg">
-            BACK
-          </WoodenButton>
-        )}
+        <WoodenButton variant="wood" onClick={handleBack} className="px-6 py-2 text-lg">
+          {room.state === 'LOBBY' ? 'BACK' : 'QUIT GAME'}
+        </WoodenButton>
       </div>
 
       <div className="flex-1 flex flex-col items-center justify-center">
