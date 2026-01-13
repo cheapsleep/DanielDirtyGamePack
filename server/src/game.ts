@@ -53,7 +53,7 @@ interface Room {
   currentInvestments?: Record<string, number>; // playerId -> amount
   // Autism Quiz fields
   aqCurrentQuestion?: number;
-  aqAnswers?: Record<string, Record<number, boolean>>; // playerId -> questionId -> agreed
+  aqAnswers?: Record<string, Record<number, boolean | 'neutral' | 'timeout'>>; // playerId -> questionId -> agreed
   aqScores?: Record<string, number>; // playerId -> score
   aqShuffledQuestions?: typeof autismQuizQuestions; // Shuffled questions for this game
   answers: { playerId: string; answer: string }[];
@@ -130,7 +130,7 @@ export class GameManager {
         room.aqAnswers ??= {};
         room.aqAnswers[player.id] ??= {};
         // Store special 'timeout' marker - we'll give them a penalty point during scoring
-        room.aqAnswers[player.id][currentQ] = 'timeout' as unknown as boolean;
+        room.aqAnswers[player.id][currentQ] = 'timeout';
       }
     }
     
@@ -1175,7 +1175,7 @@ export class GameManager {
         if (agreed === undefined) continue;
         
         // Timeout penalty - counts as 1 point towards autism score
-        if (agreed === ('timeout' as unknown as boolean)) {
+        if (agreed === 'timeout') {
           score++;
           continue;
         }
