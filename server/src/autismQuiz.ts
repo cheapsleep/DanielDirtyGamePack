@@ -180,11 +180,6 @@ export function generateCertificateSVG(
   <text x="400" y="${450 + i * 22}" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" fill="${i === 0 ? '#4ade80' : '#cccccc'}">
     ${i + 1}. ${escapeXmlForCert(r.name)} — Score: ${r.score}/20
   </text>`).join('')}
-  
-  <!-- Footer -->
-  <text x="400" y="570" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="#666666">
-    Daniel's Dirty Game Pack • Autism Assessment™
-  </text>
 </svg>`;
 }
 
@@ -259,10 +254,5 @@ export function generateMostAutisticCertificateSVG(
   <text x="400" y="${450 + i * 22}" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" fill="${i === rankings.length - 1 ? '#a855f7' : '#cccccc'}">
     ${i + 1}. ${escapeXmlForCert(r.name)} — Score: ${r.score}/20
   </text>`).join('')}
-  
-  <!-- Footer -->
-  <text x="400" y="570" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="#666666">
-    Daniel's Dirty Game Pack • Autism Assessment™
-  </text>
 </svg>`;
 }
