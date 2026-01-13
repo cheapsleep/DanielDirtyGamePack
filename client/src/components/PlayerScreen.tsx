@@ -1122,8 +1122,8 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
             
             <ScribbleCanvas
               mode="draw"
-              width={400}
-              height={300}
+              width={800}
+              height={600}
               onStroke={(stroke: { points: { x: number; y: number }[]; color: string; width: number }) => {
                 socket.emit('game_action', { action: 'SC_DRAW_STROKE', stroke });
               }}

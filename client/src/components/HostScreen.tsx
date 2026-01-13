@@ -798,7 +798,7 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
                         <DrawingCanvas
                             mode="view"
                             width={800}
-                            height={500}
+                            height={600}
                             strokes={strokeReceiver.strokes}
                             className="max-w-full max-h-full"
                         />
