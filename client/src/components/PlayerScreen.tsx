@@ -2,8 +2,9 @@ import { useEffect, useState, useRef } from 'react';
 import { socket, socketServerUrl } from '../socket';
 
 import WoodenButton from './WoodenButton';
+import ScribbleCanvas from './DrawingCanvas';
 
-// Simple drawing canvas
+// Simple drawing canvas (for Dubiously Patented)
 function DrawingCanvas({ onChange }: { onChange: (data: string) => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -115,6 +116,9 @@ type GameState =
   | 'DP_RESULTS'
   | 'AQ_QUESTION'
   | 'AQ_RESULTS'
+  | 'SC_WORD_PICK'
+  | 'SC_DRAWING'
+  | 'SC_ROUND_RESULTS'
   | 'END';
 
 interface RoomPublicState {
@@ -129,6 +133,18 @@ interface RoomPublicState {
   promptText?: string;
   aqCurrentQuestion?: number;
   aqAnsweredCount?: number;
+  // Scribble Scrabble fields
+  scDrawerId?: string;
+  scDrawerName?: string;
+  scWordHint?: string;
+  scRoundTime?: number;
+  scRoundDuration?: number;
+  scRoundsPerPlayer?: number;
+  scCurrentRound?: number;
+  scTotalRounds?: number;
+  scCorrectGuessers?: string[];
+  scScores?: Record<string, number>;
+  scGuessChat?: { playerId: string; playerName: string; guess: string; isCorrect: boolean; isClose: boolean }[];
 }
 
 export default function PlayerScreen({ onBack }: PlayerScreenProps) {
@@ -155,6 +171,13 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
   const [aqResults, setAqResults] = useState<{ rankings: { id: string; name: string; score: number }[]; winnerId: string; winnerName: string; certificate: string; loserId: string; loserName: string; loserCertificate: string } | null>(null);
   const [aqAnswered, setAqAnswered] = useState(false);
   const [aqTimeLeft, setAqTimeLeft] = useState(30);
+  // Scribble Scrabble state
+  const [scWordOptions, setScWordOptions] = useState<string[]>([]);
+  const [scTimeLeft, setScTimeLeft] = useState(60);
+  const [scGuessDraft, setScGuessDraft] = useState('');
+  const [scGuessChat, setScGuessChat] = useState<{ playerId: string; playerName: string; guess: string; isCorrect: boolean; isClose: boolean }[]>([]);
+  const [scRoundWord, setScRoundWord] = useState<string>('');
+  const [scRoundScores, setScRoundScores] = useState<Record<string, number>>({});
 
   useEffect(() => {
     const hash = window.location.hash;
@@ -246,6 +269,41 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
       setAqTimeLeft(data.timeLeft);
     });
 
+    // Scribble Scrabble events
+    socket.on('sc_word_options', (data: { words: string[] }) => {
+      setScWordOptions(data.words);
+    });
+
+    socket.on('sc_timer', (data: { timeLeft: number }) => {
+      setScTimeLeft(data.timeLeft);
+    });
+
+    socket.on('sc_guess_chat', (data: { playerId: string; playerName: string; guess: string; isCorrect: boolean; isClose: boolean }) => {
+      setScGuessChat(prev => [...prev, data]);
+    });
+
+    socket.on('sc_correct_guess', () => {
+      // Notification handled by sc_guess_chat
+    });
+
+    socket.on('sc_stroke_data', () => {
+      // Players don't see the canvas - only host does
+    });
+
+    socket.on('sc_clear_canvas', () => {
+      // Players don't see the canvas
+    });
+
+    socket.on('sc_round_end', (data: { word: string; correctGuessers: string[]; scores: Record<string, number> }) => {
+      setScRoundWord(data.word);
+      setScRoundScores(data.scores);
+      setScGuessChat([]);
+    });
+
+    socket.on('sc_game_end', () => {
+      // Game ended, handled by room state change
+    });
+
     socket.on('error', (data) => {
         if (data?.code === 'GAME_ERROR') {
           setSubmitted(false);
@@ -287,6 +345,14 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
       socket.off('aq_question');
       socket.off('aq_results');
       socket.off('aq_timer');
+      socket.off('sc_word_options');
+      socket.off('sc_timer');
+      socket.off('sc_guess_chat');
+      socket.off('sc_correct_guess');
+      socket.off('sc_stroke_data');
+      socket.off('sc_clear_canvas');
+      socket.off('sc_round_end');
+      socket.off('sc_game_end');
       socket.off('error');
       socket.off('connect_error');
       socket.off('room_closed');
@@ -493,14 +559,64 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
                 {isController ? (
                   <div className="mt-8 w-full max-w-md mx-auto">
                     <div className="text-slate-300 text-lg mb-4">You are the controller.</div>
-                    <div className="flex gap-3 justify-center mb-4">
-                      <WoodenButton type="button" variant="wood" onClick={handleAddBot} className="px-6">
-                        ADD CPU
-                      </WoodenButton>
-                      <WoodenButton type="button" variant="wood" onClick={handleRemoveBot} className="px-6">
-                        REMOVE CPU
-                      </WoodenButton>
-                    </div>
+                    
+                    {/* Scribble Scrabble settings */}
+                    {gameId === 'scribble-scrabble' && (
+                      <div className="mb-6 p-4 bg-slate-800 rounded-lg">
+                        <h3 className="text-lg font-bold text-orange-400 mb-3">Game Settings</h3>
+                        <div className="flex flex-col gap-3">
+                          <div>
+                            <label className="text-sm text-slate-400 block mb-1">Rounds per player:</label>
+                            <div className="flex gap-2 justify-center">
+                              {[1, 2, 3].map(n => (
+                                <button
+                                  key={n}
+                                  onClick={() => socket.emit('game_action', { action: 'SC_SET_ROUNDS', rounds: n })}
+                                  className={`px-4 py-2 rounded font-bold ${
+                                    (room?.scRoundsPerPlayer ?? 1) === n 
+                                      ? 'bg-orange-500 text-black' 
+                                      : 'bg-slate-700 text-white'
+                                  }`}
+                                >
+                                  {n}×
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          <div>
+                            <label className="text-sm text-slate-400 block mb-1">Round timer:</label>
+                            <div className="flex gap-2 justify-center flex-wrap">
+                              {[60, 90, 120, 150].map(sec => (
+                                <button
+                                  key={sec}
+                                  onClick={() => socket.emit('game_action', { action: 'SC_SET_TIMER', duration: sec })}
+                                  className={`px-3 py-2 rounded font-bold ${
+                                    (room?.scRoundDuration ?? 60) === sec 
+                                      ? 'bg-orange-500 text-black' 
+                                      : 'bg-slate-700 text-white'
+                                  }`}
+                                >
+                                  {sec}s
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Bot controls - not for Scribble Scrabble */}
+                    {gameId !== 'scribble-scrabble' && (
+                      <div className="flex gap-3 justify-center mb-4">
+                        <WoodenButton type="button" variant="wood" onClick={handleAddBot} className="px-6">
+                          ADD CPU
+                        </WoodenButton>
+                        <WoodenButton type="button" variant="wood" onClick={handleRemoveBot} className="px-6">
+                          REMOVE CPU
+                        </WoodenButton>
+                      </div>
+                    )}
+                    
                     <WoodenButton
                       type="button"
                       variant="red"
@@ -514,7 +630,9 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
                     >
                       EVERYBODY'S IN!
                     </WoodenButton>
-                    <p className="mt-4 text-sm text-slate-500">Minimum 3 players.</p>
+                    <p className="mt-4 text-sm text-slate-500">
+                      {gameId === 'scribble-scrabble' ? 'Minimum 3 players. No bots allowed!' : 'Minimum 3 players.'}
+                    </p>
                   </div>
                 ) : (
                   <p className="mt-8 text-sm text-slate-600">Waiting for the controller to start...</p>
@@ -946,6 +1064,173 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
                   FINISH
                 </WoodenButton>
               </div>
+            )}
+          </div>
+        )}
+
+        {/* Scribble Scrabble - Word Pick (Drawer) */}
+        {gameState === 'SC_WORD_PICK' && room?.scDrawerId === playerId && (
+          <div className="text-center w-full max-w-md mx-auto">
+            <h2 className="text-2xl font-bold mb-2 text-orange-400">🎨 You're Drawing!</h2>
+            <p className="text-slate-400 mb-6">Pick a word to draw:</p>
+            <div className="flex flex-col gap-3">
+              {scWordOptions.map(word => (
+                <WoodenButton
+                  key={word}
+                  type="button"
+                  variant="wood"
+                  onClick={() => {
+                    socket.emit('game_action', { action: 'SC_PICK_WORD', word });
+                    setScWordOptions([]);
+                  }}
+                  className="w-full text-xl py-4"
+                >
+                  {word.toUpperCase()}
+                </WoodenButton>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Scribble Scrabble - Word Pick (Waiting) */}
+        {gameState === 'SC_WORD_PICK' && room?.scDrawerId !== playerId && (
+          <div className="text-center">
+            <h2 className="text-2xl font-bold mb-2 text-orange-400">🎨 Get Ready!</h2>
+            <p className="text-slate-400">{room?.scDrawerName} is picking a word...</p>
+          </div>
+        )}
+
+        {/* Scribble Scrabble - Drawing (Drawer) */}
+        {gameState === 'SC_DRAWING' && room?.scDrawerId === playerId && (
+          <div className="w-full max-w-2xl mx-auto">
+            <div className="text-center mb-4">
+              <div className="text-4xl font-bold text-orange-400 mb-1">
+                {scTimeLeft}<span className="text-xl">s</span>
+              </div>
+              <p className="text-slate-400 text-sm">Round {room?.scCurrentRound}/{room?.scTotalRounds}</p>
+            </div>
+            
+            <ScribbleCanvas
+              mode="draw"
+              width={600}
+              height={400}
+              onStroke={(stroke: { points: { x: number; y: number }[]; color: string; width: number }) => {
+                socket.emit('game_action', { action: 'SC_DRAW_STROKE', stroke });
+              }}
+              onClear={() => {
+                socket.emit('game_action', { action: 'SC_CLEAR_CANVAS' });
+              }}
+            />
+            
+            <div className="mt-4 flex justify-center">
+              <WoodenButton
+                type="button"
+                variant="wood"
+                onClick={() => {
+                  socket.emit('game_action', { action: 'SC_REVEAL_HINT' });
+                }}
+                className="text-sm"
+              >
+                💡 REVEAL A LETTER
+              </WoodenButton>
+            </div>
+          </div>
+        )}
+
+        {/* Scribble Scrabble - Drawing (Guesser) */}
+        {gameState === 'SC_DRAWING' && room?.scDrawerId !== playerId && (
+          <div className="w-full max-w-md mx-auto">
+            <div className="text-center mb-4">
+              <div className="text-4xl font-bold text-orange-400 mb-1">
+                {scTimeLeft}<span className="text-xl">s</span>
+              </div>
+              <p className="text-slate-400 text-sm mb-2">{room?.scDrawerName} is drawing</p>
+              <div className="text-3xl font-mono tracking-widest text-white mb-2">
+                {room?.scWordHint}
+              </div>
+              <p className="text-slate-400 text-sm">Round {room?.scCurrentRound}/{room?.scTotalRounds}</p>
+            </div>
+            
+            {room?.scCorrectGuessers?.includes(playerId) ? (
+              <div className="text-center py-8">
+                <p className="text-green-400 text-2xl font-bold">✓ You got it!</p>
+                <p className="text-slate-400">Waiting for others...</p>
+              </div>
+            ) : (
+              <form onSubmit={(e) => {
+                e.preventDefault();
+                if (scGuessDraft.trim()) {
+                  socket.emit('game_action', { action: 'SC_GUESS', guess: scGuessDraft.trim() });
+                  setScGuessDraft('');
+                }
+              }} className="flex gap-2 mb-4">
+                <input
+                  type="text"
+                  value={scGuessDraft}
+                  onChange={(e) => setScGuessDraft(e.target.value)}
+                  placeholder="Type your guess..."
+                  className="flex-1 p-3 bg-slate-800 rounded-lg text-lg focus:ring-2 focus:ring-orange-500 outline-none"
+                  autoComplete="off"
+                />
+                <WoodenButton type="submit" variant="red" className="px-6">
+                  GUESS
+                </WoodenButton>
+              </form>
+            )}
+            
+            {/* Guess chat */}
+            <div className="bg-slate-800 rounded-lg p-3 h-48 overflow-y-auto">
+              {scGuessChat.length === 0 ? (
+                <p className="text-slate-500 text-center">Guesses will appear here...</p>
+              ) : (
+                <div className="space-y-1">
+                  {scGuessChat.map((g, i) => (
+                    <div key={i} className={`text-sm ${
+                      g.isCorrect ? 'text-green-400 font-bold' : 
+                      g.isClose ? 'text-yellow-400' : 
+                      'text-slate-300'
+                    }`}>
+                      <span className="font-semibold">{g.playerName}:</span> {g.guess}
+                      {g.isClose && !g.isCorrect && <span className="ml-1 text-yellow-500">Close!</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Scribble Scrabble - Round Results */}
+        {gameState === 'SC_ROUND_RESULTS' && (
+          <div className="text-center w-full max-w-md mx-auto">
+            <h2 className="text-2xl font-bold mb-2 text-orange-400">⏱️ Time's Up!</h2>
+            <p className="text-3xl font-bold text-white mb-4">
+              The word was: <span className="text-yellow-400">{scRoundWord.toUpperCase()}</span>
+            </p>
+            
+            <div className="bg-slate-800 rounded-lg p-4 mb-4">
+              <h3 className="text-lg font-semibold mb-2">Current Scores:</h3>
+              <div className="space-y-1">
+                {Object.entries(scRoundScores)
+                  .sort(([,a], [,b]) => b - a)
+                  .map(([pid, score], i) => {
+                    const player = room?.players?.find(p => p.id === pid);
+                    return (
+                      <div key={pid} className={`${pid === playerId ? 'text-yellow-400 font-bold' : 'text-slate-300'}`}>
+                        #{i + 1} {player?.name ?? 'Unknown'} - {score} pts
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+            
+            {isController && (
+              <WoodenButton type="button" variant="red" onClick={handleNextRound} className="w-full">
+                {(room?.scCurrentRound ?? 1) >= (room?.scTotalRounds ?? 1) ? 'SEE FINAL RESULTS' : 'NEXT ROUND'}
+              </WoodenButton>
+            )}
+            {!isController && (
+              <p className="text-slate-400">Waiting for controller...</p>
             )}
           </div>
         )}

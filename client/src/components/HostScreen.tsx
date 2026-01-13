@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { socket, socketServerUrl } from '../socket';
+import DrawingCanvas, { useStrokeReceiver } from './DrawingCanvas';
 
 interface Player {
   id: string;
@@ -23,6 +24,9 @@ type GameState =
   | 'DP_RESULTS'
   | 'AQ_QUESTION'
   | 'AQ_RESULTS'
+  | 'SC_WORD_PICK'
+  | 'SC_DRAWING'
+  | 'SC_ROUND_RESULTS'
   | 'END';
 
 interface RoomState {
@@ -49,6 +53,14 @@ interface RoomState {
   aqCurrentQuestion?: number;
   aqAnsweredCount?: number;
   aqScores?: Record<string, number>;
+  // Scribble Scrabble fields
+  scDrawerId?: string;
+  scDrawerName?: string;
+  scWordHint?: string;
+  scCurrentRound?: number;
+  scTotalRounds?: number;
+  scCorrectGuessers?: string[];
+  scScores?: Record<string, number>;
 }
 
 import WoodenButton from './WoodenButton';
@@ -77,6 +89,14 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
   const [aqQuestion, setAqQuestion] = useState<{ questionId: number; questionText: string; questionNumber: number; totalQuestions: number } | null>(null);
   const [aqResults, setAqResults] = useState<{ rankings: { id: string; name: string; score: number }[]; winnerId: string; winnerName: string; certificate: string; loserId: string; loserName: string; loserCertificate: string } | null>(null);
   
+  // Scribble Scrabble state
+  const [scGuessChat, setScGuessChat] = useState<{ playerName: string; guess: string; isCorrect: boolean; isClose: boolean }[]>([]);
+  const [scRoundWord, setScRoundWord] = useState<string>('');
+  const [scRoundScores, setScRoundScores] = useState<Record<string, number>>({});
+  
+  // Initialize stroke receiver for SC
+  const strokeReceiver = useStrokeReceiver();
+  
   useEffect(() => {
     // Update presentation data whenever a new presenter starts presenting
     if (
@@ -98,6 +118,14 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
       if (presentationData) setPresentationData(null);
     }
   }, [room?.state, room?.currentPresenterId, room?.currentDrawing, room?.currentTitle, room?.currentProblem, presentationData]);
+
+  // Reset SC state when starting a new drawing round
+  useEffect(() => {
+    if (room?.state === 'SC_WORD_PICK') {
+      setScGuessChat([]);
+      strokeReceiver.clearStrokes();
+    }
+  }, [room?.state, room?.scCurrentRound, strokeReceiver]);
 
   const roomCode = room?.code;
   const joinBase =
@@ -212,6 +240,36 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
         setTimeLeft(data.timeLeft);
     });
 
+    // Scribble Scrabble events
+    socket.on('sc_timer', (data: { timeLeft: number }) => {
+        setTimeLeft(data.timeLeft);
+    });
+
+    socket.on('sc_guess_chat', (data: { playerName: string; guess: string; isCorrect: boolean; isClose: boolean }) => {
+        setScGuessChat(prev => [...prev, data]);
+    });
+
+    socket.on('sc_correct_guess', () => {
+        // Could show a notification, but room_update handles correctGuessers
+    });
+
+    socket.on('sc_stroke_data', (data: { stroke: { points: { x: number; y: number }[]; color: string; width: number } }) => {
+        strokeReceiver.addCompleteStroke(data.stroke);
+    });
+
+    socket.on('sc_clear_canvas', () => {
+        strokeReceiver.clearStrokes();
+    });
+
+    socket.on('sc_round_end', (data: { word: string; scores: Record<string, number> }) => {
+        setScRoundWord(data.word);
+        setScRoundScores(data.scores);
+    });
+
+    socket.on('sc_game_end', (data: { finalScores: Record<string, number> }) => {
+        setScRoundScores(data.finalScores);
+    });
+
     socket.on('game_over', () => {
         // Handle game over if needed separately, or rely on room state 'END'
     });
@@ -271,10 +329,17 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
       socket.off('aq_question');
       socket.off('aq_results');
       socket.off('aq_timer');
+      socket.off('sc_timer');
+      socket.off('sc_guess_chat');
+      socket.off('sc_correct_guess');
+      socket.off('sc_stroke_data');
+      socket.off('sc_clear_canvas');
+      socket.off('sc_round_end');
+      socket.off('sc_game_end');
       socket.off('game_over');
       socket.off('error');
     };
-  }, [gameId, retryKey]);
+  }, [gameId, retryKey, strokeReceiver]);
 
   useEffect(() => {
     if (timeLeft <= 0) return;
@@ -307,9 +372,12 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
       ? 'Dubiously Patented' 
       : (room.gameId ?? gameId) === 'autism-assessment'
         ? 'Who Is The Most Autistic?'
-        : 'Nasty Libs'
+        : (room.gameId ?? gameId) === 'scribble-scrabble'
+          ? 'Scribble Scrabble'
+          : 'Nasty Libs'
     : '';
   const isPatented = room ? (room.gameId ?? gameId) === 'dubiously-patented' : false;
+  const isScribble = room ? (room.gameId ?? gameId) === 'scribble-scrabble' : false;
   const isPromptPhase = room ? room.state === 'NL_ANSWER' : false;
   const isVotingPhase = room ? room.state === 'NL_VOTING' : false;
   const isResultsPhase = room ? room.state === 'NL_RESULTS' || room.state === 'DP_RESULTS' : false;
@@ -695,6 +763,136 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
             </div>
         )}
 
+        {/* Scribble Scrabble - Word Pick */}
+        {room.state === 'SC_WORD_PICK' && (
+            <div className="w-full h-full flex flex-col items-center justify-center">
+                <h2 className="text-2xl text-slate-400 mb-2">ROUND {room.scCurrentRound}/{room.scTotalRounds}</h2>
+                <h1 className="text-5xl font-bold mb-8 text-orange-400">🎨 {room.scDrawerName} is picking a word...</h1>
+                <div className="animate-pulse text-2xl text-slate-400">Get ready to guess!</div>
+            </div>
+        )}
+
+        {/* Scribble Scrabble - Drawing */}
+        {room.state === 'SC_DRAWING' && (
+            <div className="w-full h-full flex gap-6">
+                {/* Main drawing area */}
+                <div className="flex-1 flex flex-col">
+                    <div className="flex justify-between items-center mb-4">
+                        <div>
+                            <h2 className="text-xl text-slate-400">ROUND {room.scCurrentRound}/{room.scTotalRounds}</h2>
+                            <p className="text-lg text-orange-400">🎨 {room.scDrawerName} is drawing</p>
+                        </div>
+                        <div className={`text-6xl font-black ${timeLeft <= 10 ? 'text-red-500 animate-pulse' : 'text-yellow-400'}`}>
+                            {timeLeft}<span className="text-3xl">s</span>
+                        </div>
+                    </div>
+                    
+                    {/* Word hint */}
+                    <div className="text-center mb-4">
+                        <div className="text-5xl font-mono tracking-[0.5em] text-white">
+                            {room.scWordHint}
+                        </div>
+                    </div>
+                    
+                    {/* Canvas */}
+                    <div className="flex-1 bg-white rounded-xl overflow-hidden flex items-center justify-center">
+                        <DrawingCanvas
+                            mode="view"
+                            width={800}
+                            height={500}
+                            strokes={strokeReceiver.strokes}
+                        />
+                    </div>
+                </div>
+                
+                {/* Sidebar: Guess chat + Leaderboard */}
+                <div className="w-80 flex flex-col gap-4">
+                    {/* Guess chat */}
+                    <div className="flex-1 bg-slate-800 rounded-xl p-4 flex flex-col">
+                        <h3 className="text-lg font-bold text-slate-300 mb-3">💬 Guesses</h3>
+                        <div className="flex-1 overflow-y-auto space-y-1">
+                            {scGuessChat.length === 0 ? (
+                                <p className="text-slate-500 text-center text-sm">Waiting for guesses...</p>
+                            ) : (
+                                scGuessChat.map((g, i) => (
+                                    <div key={i} className={`text-sm p-2 rounded ${
+                                        g.isCorrect ? 'bg-green-900/50 text-green-400 font-bold' : 
+                                        g.isClose ? 'bg-yellow-900/50 text-yellow-400' : 
+                                        'text-slate-300'
+                                    }`}>
+                                        <span className="font-semibold">{g.playerName}:</span> {g.guess}
+                                        {g.isClose && !g.isCorrect && <span className="ml-1 text-yellow-500">Close!</span>}
+                                        {g.isCorrect && <span className="ml-1">✓</span>}
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                    
+                    {/* Leaderboard */}
+                    <div className="bg-slate-800 rounded-xl p-4">
+                        <h3 className="text-lg font-bold text-slate-300 mb-3">🏆 Scores</h3>
+                        <div className="space-y-1">
+                            {Object.entries(room.scScores || {})
+                                .sort(([,a], [,b]) => b - a)
+                                .map(([pid, score], idx) => {
+                                    const player = room.players.find(p => p.id === pid);
+                                    const hasGuessed = room.scCorrectGuessers?.includes(pid);
+                                    const isDrawer = pid === room.scDrawerId;
+                                    return (
+                                        <div key={pid} className={`flex justify-between items-center p-2 rounded ${
+                                            idx === 0 ? 'bg-yellow-900/30' : 'bg-slate-900/50'
+                                        } ${hasGuessed ? 'border-l-4 border-green-500' : ''} ${isDrawer ? 'border-l-4 border-orange-500' : ''}`}>
+                                            <span className="text-sm truncate">
+                                                {isDrawer && '🎨 '}
+                                                {hasGuessed && '✓ '}
+                                                {player?.name ?? 'Unknown'}
+                                            </span>
+                                            <span className="text-sm font-bold text-green-400">{score}</span>
+                                        </div>
+                                    );
+                                })}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* Scribble Scrabble - Round Results */}
+        {room.state === 'SC_ROUND_RESULTS' && (
+            <div className="w-full h-full flex flex-col items-center justify-center">
+                <h2 className="text-2xl text-slate-400 mb-2">ROUND {room.scCurrentRound}/{room.scTotalRounds}</h2>
+                <h1 className="text-5xl font-black text-yellow-400 mb-4">⏱️ Time's Up!</h1>
+                <p className="text-4xl mb-8">
+                    The word was: <span className="text-orange-400 font-bold">{scRoundWord.toUpperCase()}</span>
+                </p>
+                
+                <div className="bg-slate-800 rounded-xl p-6 w-full max-w-lg mb-6">
+                    <h3 className="text-xl font-bold text-slate-300 mb-4 text-center">Scores</h3>
+                    <div className="space-y-2">
+                        {Object.entries(scRoundScores)
+                            .sort(([,a], [,b]) => b - a)
+                            .map(([pid, score], idx) => {
+                                const player = room.players.find(p => p.id === pid);
+                                return (
+                                    <div key={pid} className={`flex justify-between items-center p-3 rounded-lg ${
+                                        idx === 0 ? 'bg-yellow-900/50 border-2 border-yellow-500' : 'bg-slate-900'
+                                    }`}>
+                                        <div className="flex items-center gap-3">
+                                            <span className="text-xl font-bold w-8">#{idx + 1}</span>
+                                            <span className="text-lg">{player?.name ?? 'Unknown'}</span>
+                                        </div>
+                                        <span className="text-xl font-bold text-green-400">{score} pts</span>
+                                    </div>
+                                );
+                            })}
+                    </div>
+                </div>
+                
+                <p className="text-slate-400">Controller advances to {(room.scCurrentRound ?? 1) >= (room.scTotalRounds ?? 1) ? 'final results' : 'next round'}...</p>
+            </div>
+        )}
+
         {room.state === 'END' && (
             <div className="text-center w-full max-w-2xl">
                 <h1 className="text-6xl font-black text-yellow-500 mb-12">GAME OVER</h1>
@@ -706,7 +904,7 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
                                 <span className="text-2xl">{p.name}</span>
                             </div>
                             <span className="text-3xl font-bold text-green-400">
-                                {isPatented ? '$' : ''}{p.score}
+                                {isPatented ? '$' : ''}{p.score}{isScribble ? ' pts' : ''}
                             </span>
                         </div>
                     ))}

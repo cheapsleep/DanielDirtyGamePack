@@ -32,6 +32,14 @@ export default function GameLibrary({ onSelectGame }: GameLibraryProps) {
       logo: '/assets/Autism_Assessment_Logo.png',
       minPlayers: 2,
     },
+    {
+      id: 'scribble-scrabble',
+      title: 'SCRIBBLE SCRABBLE',
+      description: 'Draw and guess! Take turns drawing secret words while others race to guess. No bots allowed — humans only!',
+      color: 'bg-orange-600',
+      logo: '/assets/Scribble_Scrabble_Logo.png',
+      minPlayers: 3,
+    },
   ];
 
   return (

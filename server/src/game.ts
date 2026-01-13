@@ -2,8 +2,9 @@ import { Server, Socket } from 'socket.io';
 import { v4 as uuidv4 } from 'uuid';
 import { nastyPrompts, nastyAnswers } from './nastyPrompts';
 import { autismQuizQuestions, generateCertificateSVG, generateMostAutisticCertificateSVG } from './autismQuiz';
+import { generateWordOptions, isCloseGuess, isCorrectGuess, generateWordHint } from './scribbleWords';
 
-type GameId = 'nasty-libs' | 'dubiously-patented' | 'autism-assessment';
+type GameId = 'nasty-libs' | 'dubiously-patented' | 'autism-assessment' | 'scribble-scrabble';
 
 interface Player {
   id: string;
@@ -37,6 +38,9 @@ interface Room {
     | 'DP_RESULTS'
     | 'AQ_QUESTION'
     | 'AQ_RESULTS'
+    | 'SC_WORD_PICK'
+    | 'SC_DRAWING'
+    | 'SC_ROUND_RESULTS'
     | 'END';
   currentRound: number;
   totalRounds: number;
@@ -56,6 +60,21 @@ interface Room {
   aqAnswers?: Record<string, Record<number, boolean | 'neutral' | 'timeout'>>; // playerId -> questionId -> agreed
   aqScores?: Record<string, number>; // playerId -> score
   aqShuffledQuestions?: typeof autismQuizQuestions; // Shuffled questions for this game
+  // Scribble Scrabble fields
+  scDrawerId?: string; // Current drawer's player ID
+  scWord?: string; // Current word to draw
+  scRevealedIndices?: number[]; // Indices of revealed hint letters
+  scRoundTime?: number; // Seconds remaining in current round
+  scRoundDuration?: number; // Round duration setting (60/90/120/150)
+  scRoundsPerPlayer?: number; // How many times each player draws (1/2/3)
+  scCorrectGuessers?: string[]; // Player IDs who guessed correctly (in order)
+  scWordOptions?: string[]; // 3 word choices for drawer
+  scDrawingStrokes?: { points: { x: number; y: number }[]; color: string; width: number }[]; // Stored strokes
+  scCurrentRound?: number; // Current round number
+  scTotalRounds?: number; // Total rounds (players * roundsPerPlayer)
+  scDrawerOrder?: string[]; // Order of drawer player IDs
+  scScores?: Record<string, number>; // playerId -> score
+  scGuessChat?: { playerId: string; playerName: string; guess: string; isCorrect: boolean; isClose: boolean; timestamp: number }[];
   answers: { playerId: string; answer: string }[];
   votes: Record<string, number>; // answerIndex -> count
   votedBy?: Record<string, boolean>;
@@ -67,6 +86,7 @@ export class GameManager {
   private socketRoomMap: Map<string, string> = new Map(); // socketId -> roomCode
   private botRun: Map<string, { running: boolean; pending: boolean }> = new Map();
   private aqTimers: Map<string, NodeJS.Timeout> = new Map(); // roomCode -> timer
+  private scTimers: Map<string, NodeJS.Timeout> = new Map(); // roomCode -> timer (Scribble Scrabble)
 
   constructor(io: Server) {
     this.io = io;
@@ -397,6 +417,34 @@ export class GameManager {
       case 'AQ_ANSWER':
         this.handleAQAnswer(room, socket.id, data.questionId, data.agreed);
         break;
+      case 'SC_SET_ROUNDS':
+        if (this.isControllerSocket(room, socket.id) && room.state === 'LOBBY') {
+          room.scRoundsPerPlayer = Math.min(3, Math.max(1, data.rounds || 1));
+          this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+        }
+        break;
+      case 'SC_SET_TIMER':
+        if (this.isControllerSocket(room, socket.id) && room.state === 'LOBBY') {
+          const validDurations = [60, 90, 120, 150];
+          room.scRoundDuration = validDurations.includes(data.duration) ? data.duration : 60;
+          this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+        }
+        break;
+      case 'SC_PICK_WORD':
+        this.handleSCPickWord(room, socket.id, data.word);
+        break;
+      case 'SC_GUESS':
+        this.handleSCGuess(room, socket.id, data.guess);
+        break;
+      case 'SC_DRAW_STROKE':
+        this.handleSCDrawStroke(room, socket.id, data.stroke);
+        break;
+      case 'SC_CLEAR_CANVAS':
+        this.handleSCClearCanvas(room, socket.id);
+        break;
+      case 'SC_REVEAL_HINT':
+        this.handleSCRevealHint(room, socket.id);
+        break;
       case 'NEXT_ROUND':
         if (this.isControllerSocket(room, socket.id)) {
             this.nextRound(room);
@@ -444,6 +492,14 @@ export class GameManager {
 
   private addBot(room: Room) {
     if (room.state !== 'LOBBY') return;
+    // Scribble Scrabble doesn't support bots
+    if (room.gameId === 'scribble-scrabble') {
+      const controller = room.players.find(p => p.id === room.controllerPlayerId);
+      if (controller) {
+        this.io.to(controller.socketId).emit('error_message', { message: 'Scribble Scrabble does not support bots — humans only!' });
+      }
+      return;
+    }
     const botCount = room.players.filter(p => p.isBot).length;
     const id = uuidv4();
     const adj = ['Turbo','Mega','Silly','Quantum','Pocket','Mystic','Zippy','Wacky','Glitchy','Jolly'];
@@ -775,8 +831,8 @@ export class GameManager {
   private startGame(room: Room) {
     let activePlayers = this.getActivePlayers(room);
     
-    // Auto-fill bots if less than 4 players (skip for autism quiz - no bots needed)
-    if (room.gameId !== 'autism-assessment') {
+    // Auto-fill bots if less than 4 players (skip for autism quiz and scribble scrabble - no bots)
+    if (room.gameId !== 'autism-assessment' && room.gameId !== 'scribble-scrabble') {
       while (activePlayers.length < 4) {
         this.addBot(room);
         activePlayers = this.getActivePlayers(room);
@@ -818,6 +874,11 @@ export class GameManager {
       });
       this.startAQTimer(room);
       this.scheduleBotRun(room);
+      return;
+    }
+
+    if (room.gameId === 'scribble-scrabble') {
+      this.startScribbleScrabble(room);
       return;
     }
 
@@ -1305,6 +1366,12 @@ export class GameManager {
       return;
     }
 
+    if (room.gameId === 'scribble-scrabble') {
+      if (room.state !== 'SC_ROUND_RESULTS') return;
+      this.advanceSCRound(room);
+      return;
+    }
+
     if (room.state !== 'DP_RESULTS') return;
     this.endGame(room);
   }
@@ -1335,6 +1402,285 @@ export class GameManager {
     }
     return uuidv4().slice(0, 4).toUpperCase();
   }
+
+  // ==================== SCRIBBLE SCRABBLE METHODS ====================
+
+  private startScribbleScrabble(room: Room) {
+    const activePlayers = this.getActivePlayers(room);
+    
+    // Initialize settings with defaults if not set in lobby
+    room.scRoundsPerPlayer = room.scRoundsPerPlayer ?? 1;
+    room.scRoundDuration = room.scRoundDuration ?? 60;
+    
+    // Create drawer order (shuffle players, repeat for rounds per player)
+    const shuffledPlayers = [...activePlayers].sort(() => Math.random() - 0.5);
+    room.scDrawerOrder = [];
+    for (let i = 0; i < room.scRoundsPerPlayer; i++) {
+      room.scDrawerOrder.push(...shuffledPlayers.map(p => p.id));
+    }
+    
+    room.scTotalRounds = room.scDrawerOrder.length;
+    room.scCurrentRound = 1;
+    room.scScores = {};
+    
+    // Initialize scores
+    for (const p of activePlayers) {
+      room.scScores[p.id] = 0;
+    }
+    
+    this.io.to(room.code).emit('game_started');
+    this.startSCRound(room);
+  }
+
+  private startSCRound(room: Room) {
+    const roundIndex = (room.scCurrentRound ?? 1) - 1;
+    const drawerId = room.scDrawerOrder?.[roundIndex];
+    if (!drawerId) {
+      this.endScribbleScrabble(room);
+      return;
+    }
+    
+    room.scDrawerId = drawerId;
+    room.scWord = undefined;
+    room.scRevealedIndices = [];
+    room.scCorrectGuessers = [];
+    room.scDrawingStrokes = [];
+    room.scGuessChat = [];
+    room.scWordOptions = generateWordOptions();
+    room.state = 'SC_WORD_PICK';
+    
+    // Send word options only to the drawer
+    const drawer = room.players.find(p => p.id === drawerId);
+    if (drawer) {
+      this.io.to(drawer.socketId).emit('sc_word_options', { words: room.scWordOptions });
+    }
+    
+    this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+  }
+
+  private handleSCPickWord(room: Room, socketId: string, word: string) {
+    if (room.gameId !== 'scribble-scrabble') return;
+    if (room.state !== 'SC_WORD_PICK') return;
+    
+    const player = room.players.find(p => p.socketId === socketId);
+    if (!player || player.id !== room.scDrawerId) return;
+    
+    // Validate word is one of the options
+    if (!room.scWordOptions?.includes(word)) return;
+    
+    room.scWord = word;
+    room.scRoundTime = room.scRoundDuration ?? 60;
+    room.state = 'SC_DRAWING';
+    
+    this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+    this.startSCTimer(room);
+  }
+
+  private handleSCGuess(room: Room, socketId: string, guess: string) {
+    if (room.gameId !== 'scribble-scrabble') return;
+    if (room.state !== 'SC_DRAWING') return;
+    if (!room.scWord) return;
+    
+    const player = room.players.find(p => p.socketId === socketId);
+    if (!player) return;
+    
+    // Drawer can't guess
+    if (player.id === room.scDrawerId) return;
+    
+    // Can't guess if already got it correct
+    if (room.scCorrectGuessers?.includes(player.id)) return;
+    
+    const correct = isCorrectGuess(guess, room.scWord);
+    const close = !correct && isCloseGuess(guess, room.scWord);
+    
+    // Add to chat
+    room.scGuessChat = room.scGuessChat ?? [];
+    room.scGuessChat.push({
+      playerId: player.id,
+      playerName: player.name,
+      guess: correct ? '✓ Got it!' : guess, // Hide the actual word if correct
+      isCorrect: correct,
+      isClose: close,
+      timestamp: Date.now()
+    });
+    
+    // Broadcast guess to everyone
+    this.io.to(room.code).emit('sc_guess_chat', {
+      playerId: player.id,
+      playerName: player.name,
+      guess: correct ? '✓ Got it!' : guess,
+      isCorrect: correct,
+      isClose: close
+    });
+    
+    if (correct) {
+      room.scCorrectGuessers = room.scCorrectGuessers ?? [];
+      room.scCorrectGuessers.push(player.id);
+      
+      // Calculate points based on order and time remaining
+      const timeRemaining = room.scRoundTime ?? 0;
+      const position = room.scCorrectGuessers.length;
+      const activePlayers = this.getActivePlayers(room);
+      const maxPoints = 1000;
+      
+      // Points: faster = more, earlier position = more
+      const timeBonus = Math.floor((timeRemaining / (room.scRoundDuration ?? 60)) * 500);
+      const positionMultiplier = Math.max(0.2, 1 - (position - 1) * 0.2);
+      const guesserPoints = Math.floor((maxPoints * positionMultiplier) + timeBonus);
+      
+      // Drawer gets points for each correct guess
+      const drawerPoints = 100;
+      
+      room.scScores = room.scScores ?? {};
+      room.scScores[player.id] = (room.scScores[player.id] ?? 0) + guesserPoints;
+      if (room.scDrawerId) {
+        room.scScores[room.scDrawerId] = (room.scScores[room.scDrawerId] ?? 0) + drawerPoints;
+      }
+      
+      // Notify of correct guess
+      this.io.to(room.code).emit('sc_correct_guess', {
+        playerId: player.id,
+        playerName: player.name,
+        points: guesserPoints
+      });
+      
+      // Check if everyone has guessed (except drawer)
+      const nonDrawerPlayers = activePlayers.filter(p => p.id !== room.scDrawerId);
+      if (room.scCorrectGuessers.length >= nonDrawerPlayers.length) {
+        // Everyone guessed! End round early
+        this.clearSCTimer(room.code);
+        this.endSCRound(room);
+      }
+    }
+    
+    this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+  }
+
+  private handleSCDrawStroke(room: Room, socketId: string, stroke: { points: { x: number; y: number }[]; color: string; width: number }) {
+    if (room.gameId !== 'scribble-scrabble') return;
+    if (room.state !== 'SC_DRAWING') return;
+    
+    const player = room.players.find(p => p.socketId === socketId);
+    if (!player || player.id !== room.scDrawerId) return;
+    
+    // Store stroke for late joiners/reconnects
+    room.scDrawingStrokes = room.scDrawingStrokes ?? [];
+    room.scDrawingStrokes.push(stroke);
+    
+    // Broadcast stroke to all clients immediately (real-time)
+    this.io.to(room.code).emit('sc_stroke_data', { stroke });
+  }
+
+  private handleSCClearCanvas(room: Room, socketId: string) {
+    if (room.gameId !== 'scribble-scrabble') return;
+    if (room.state !== 'SC_DRAWING') return;
+    
+    const player = room.players.find(p => p.socketId === socketId);
+    if (!player || player.id !== room.scDrawerId) return;
+    
+    room.scDrawingStrokes = [];
+    this.io.to(room.code).emit('sc_clear_canvas');
+  }
+
+  private handleSCRevealHint(room: Room, socketId: string) {
+    if (room.gameId !== 'scribble-scrabble') return;
+    if (room.state !== 'SC_DRAWING') return;
+    if (!room.scWord) return;
+    
+    const player = room.players.find(p => p.socketId === socketId);
+    if (!player || player.id !== room.scDrawerId) return;
+    
+    room.scRevealedIndices = room.scRevealedIndices ?? [];
+    
+    // Find unrevealed letter indices (skip spaces)
+    const unrevealedIndices = room.scWord
+      .split('')
+      .map((char, i) => ({ char, i }))
+      .filter(({ char, i }) => char !== ' ' && !room.scRevealedIndices!.includes(i))
+      .map(({ i }) => i);
+    
+    if (unrevealedIndices.length === 0) return;
+    
+    // Reveal a random letter
+    const randomIndex = unrevealedIndices[Math.floor(Math.random() * unrevealedIndices.length)];
+    room.scRevealedIndices.push(randomIndex);
+    
+    this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+  }
+
+  private startSCTimer(room: Room) {
+    this.clearSCTimer(room.code);
+    
+    const startTime = Date.now();
+    const duration = room.scRoundDuration ?? 60;
+    
+    const tick = () => {
+      const elapsed = Math.floor((Date.now() - startTime) / 1000);
+      room.scRoundTime = Math.max(0, duration - elapsed);
+      
+      // Broadcast time update
+      this.io.to(room.code).emit('sc_timer', { timeLeft: room.scRoundTime });
+      
+      if (room.scRoundTime <= 0) {
+        this.clearSCTimer(room.code);
+        this.endSCRound(room);
+      } else {
+        this.scTimers.set(room.code, setTimeout(tick, 1000));
+      }
+    };
+    
+    this.scTimers.set(room.code, setTimeout(tick, 1000));
+  }
+
+  private clearSCTimer(roomCode: string) {
+    const timer = this.scTimers.get(roomCode);
+    if (timer) {
+      clearTimeout(timer);
+      this.scTimers.delete(roomCode);
+    }
+  }
+
+  private endSCRound(room: Room) {
+    room.state = 'SC_ROUND_RESULTS';
+    
+    // Reveal the word to everyone
+    this.io.to(room.code).emit('sc_round_end', {
+      word: room.scWord,
+      correctGuessers: room.scCorrectGuessers,
+      scores: room.scScores
+    });
+    
+    this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+  }
+
+  private advanceSCRound(room: Room) {
+    room.scCurrentRound = (room.scCurrentRound ?? 1) + 1;
+    
+    if (room.scCurrentRound > (room.scTotalRounds ?? 1)) {
+      this.endScribbleScrabble(room);
+    } else {
+      this.startSCRound(room);
+    }
+  }
+
+  private endScribbleScrabble(room: Room) {
+    room.state = 'END';
+    this.clearSCTimer(room.code);
+    
+    // Calculate final rankings
+    const rankings = Object.entries(room.scScores ?? {})
+      .map(([playerId, score]) => ({
+        playerId,
+        name: room.players.find(p => p.id === playerId)?.name ?? 'Unknown',
+        score
+      }))
+      .sort((a, b) => b.score - a.score);
+    
+    this.io.to(room.code).emit('sc_game_end', { rankings });
+    this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+  }
+
+  // ==================== END SCRIBBLE SCRABBLE METHODS ====================
 
   private getRoomPublicState(room: Room) {
     // Count how many players have answered the current AQ question
@@ -1371,7 +1717,20 @@ export class GameManager {
       // Autism Quiz fields
       aqCurrentQuestion: room.aqCurrentQuestion,
       aqAnsweredCount,
-      aqScores: room.aqScores
+      aqScores: room.aqScores,
+      // Scribble Scrabble fields
+      scDrawerId: room.scDrawerId,
+      scDrawerName: room.scDrawerId ? room.players.find(p => p.id === room.scDrawerId)?.name : undefined,
+      scWordHint: room.scWord ? generateWordHint(room.scWord, room.scRevealedIndices ?? []) : undefined,
+      scRoundTime: room.scRoundTime,
+      scRoundDuration: room.scRoundDuration ?? 60,
+      scRoundsPerPlayer: room.scRoundsPerPlayer ?? 1,
+      scCurrentRound: room.scCurrentRound,
+      scTotalRounds: room.scTotalRounds,
+      scCorrectGuessers: room.scCorrectGuessers,
+      scScores: room.scScores,
+      scGuessChat: room.scGuessChat,
+      scDrawingStrokes: room.scDrawingStrokes
     };
   }
 
