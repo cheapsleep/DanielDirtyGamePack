@@ -837,7 +837,7 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
                     type="button" 
                     variant="wood" 
                     onClick={() => {
-                      socket.emit('action', { type: 'AQ_ANSWER', questionId: aqQuestion.questionId, agreed: true });
+                      socket.emit('game_action', { action: 'AQ_ANSWER', questionId: aqQuestion.questionId, agreed: true });
                       setAqAnswered(true);
                     }}
                     className="px-8 py-4 text-lg"
@@ -848,7 +848,7 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
                     type="button" 
                     variant="red" 
                     onClick={() => {
-                      socket.emit('action', { type: 'AQ_ANSWER', questionId: aqQuestion.questionId, agreed: false });
+                      socket.emit('game_action', { action: 'AQ_ANSWER', questionId: aqQuestion.questionId, agreed: false });
                       setAqAnswered(true);
                     }}
                     className="px-8 py-4 text-lg"
