@@ -89,7 +89,7 @@ export default function GameLibrary({ onSelectGame }: GameLibraryProps) {
               <div className="card-rock rock-top-left" aria-hidden></div>
               <div className="card-rock rock-bottom-right" aria-hidden></div>
               {game.logo ? (
-                 <img src={game.logo} alt={game.title} className="max-h-[200px] max-w-full relative z-10 transform -rotate-6 drop-shadow-2xl" />
+                 <img src={game.logo} alt={game.title} className="h-56 w-auto relative z-10 transform -rotate-6 drop-shadow-2xl" />
               ) : (
                 <h2 className="text-5xl font-black text-white relative z-10 text-center transform -rotate-6">
                   {game.title}
