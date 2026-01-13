@@ -206,13 +206,18 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
     });
 
     socket.on('room_update', (nextRoom: any) => {
-      setRoom(nextRoom);
+      setRoom((prevRoom: RoomPublicState | null) => {
+        // Only reset drafts/submitted when game state actually changes
+        if (prevRoom?.state !== nextRoom?.state) {
+          setSubmitted(false);
+          setAnswerDraft('');
+          setPromptDraft('');
+          setDpSelected('');
+          if (nextRoom?.state !== 'DP_PICK') setDpChoices([]);
+        }
+        return nextRoom;
+      });
       if (nextRoom?.gameId) setGameId(String(nextRoom.gameId));
-      setSubmitted(false);
-      setAnswerDraft('');
-      setPromptDraft('');
-      setDpSelected('');
-      if (nextRoom?.state !== 'DP_PICK') setDpChoices([]);
     });
 
     socket.on('new_prompt', (data) => {

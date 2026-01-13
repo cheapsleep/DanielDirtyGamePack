@@ -760,14 +760,7 @@ class GameManager {
         });
     }
     startGame(room) {
-        let activePlayers = this.getActivePlayers(room);
-        // Auto-fill bots if less than 4 players (skip for autism quiz and scribble scrabble - no bots)
-        if (room.gameId !== 'autism-assessment' && room.gameId !== 'scribble-scrabble') {
-            while (activePlayers.length < 4) {
-                this.addBot(room);
-                activePlayers = this.getActivePlayers(room);
-            }
-        }
+        const activePlayers = this.getActivePlayers(room);
         room.answers = [];
         room.votes = {};
         room.votedBy = {};

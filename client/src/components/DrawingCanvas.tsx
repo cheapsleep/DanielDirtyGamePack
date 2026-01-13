@@ -313,42 +313,18 @@ export default function DrawingCanvas({
 // Export a hook for receiving real-time stroke updates
 export function useStrokeReceiver() {
   const [strokes, setStrokes] = useState<Stroke[]>([]);
-  const currentStrokeRef = useRef<Stroke | null>(null);
-  
-  const addStrokePoint = useCallback((point: Point, color: string, width: number, isNewStroke: boolean) => {
-    if (isNewStroke) {
-      // Start a new stroke
-      currentStrokeRef.current = { points: [point], color, width };
-    } else if (currentStrokeRef.current) {
-      // Add to current stroke
-      currentStrokeRef.current.points.push(point);
-    }
-    
-    // Update strokes state with current stroke included
-    setStrokes(prev => {
-      const withoutCurrent = currentStrokeRef.current 
-        ? prev.slice(0, -1) 
-        : prev;
-      return currentStrokeRef.current 
-        ? [...withoutCurrent, { ...currentStrokeRef.current }]
-        : prev;
-    });
-  }, []);
   
   const addCompleteStroke = useCallback((stroke: Stroke) => {
     setStrokes(prev => [...prev, stroke]);
-    currentStrokeRef.current = null;
   }, []);
   
   const clearStrokes = useCallback(() => {
     setStrokes([]);
-    currentStrokeRef.current = null;
   }, []);
   
   const setAllStrokes = useCallback((newStrokes: Stroke[]) => {
     setStrokes(newStrokes);
-    currentStrokeRef.current = null;
   }, []);
   
-  return { strokes, addStrokePoint, addCompleteStroke, clearStrokes, setAllStrokes };
+  return { strokes, addCompleteStroke, clearStrokes, setAllStrokes };
 }
