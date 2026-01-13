@@ -84,12 +84,12 @@ export default function GameLibrary({ onSelectGame }: GameLibraryProps) {
             whileHover={{ scale: 1.02, y: -5 }}
             className="stone-card rounded-xl overflow-visible shadow-2xl flex flex-col relative z-10"
           >
-            <div className={`h-32 ${game.color} flex items-end justify-center p-2 relative overflow-visible rounded-t-xl`}> 
+            <div className={`h-32 ${game.color} flex items-end justify-center relative overflow-visible rounded-t-xl`}> 
               <div className="absolute inset-0 bg-black opacity-20 rounded-t-xl"></div>
               <div className="card-rock rock-top-left" aria-hidden></div>
               <div className="card-rock rock-bottom-right" aria-hidden></div>
               {game.logo ? (
-                 <img src={game.logo} alt={game.title} className="h-96 w-auto relative z-10 drop-shadow-2xl translate-y-20" />
+                 <img src={game.logo} alt={game.title} className="max-h-96 max-w-[120%] object-contain relative z-10 drop-shadow-2xl mb-2" />
               ) : (
                 <h2 className="text-5xl font-black text-white relative z-10 text-center transform -rotate-6">
                   {game.title}
