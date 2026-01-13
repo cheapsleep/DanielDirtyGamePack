@@ -84,7 +84,7 @@ export default function GameLibrary({ onSelectGame }: GameLibraryProps) {
             whileHover={{ scale: 1.02, y: -5 }}
             className="stone-card rounded-xl overflow-hidden shadow-2xl flex flex-col relative z-10"
           >
-            <div className={`h-72 ${game.color} flex items-center justify-center p-6 relative overflow-hidden`}> 
+            <div className={`h-48 ${game.color} flex items-center justify-center p-2 relative overflow-hidden`}> 
               <div className="absolute inset-0 bg-black opacity-20"></div>
               <div className="card-rock rock-top-left" aria-hidden></div>
               <div className="card-rock rock-bottom-right" aria-hidden></div>
