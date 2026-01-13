@@ -1,7 +1,7 @@
 import { Server, Socket } from 'socket.io';
 import { v4 as uuidv4 } from 'uuid';
 import { nastyPrompts, nastyAnswers } from './nastyPrompts';
-import { autismQuizQuestions, generateCertificateSVG } from './autismQuiz';
+import { autismQuizQuestions, generateCertificateSVG, generateMostAutisticCertificateSVG } from './autismQuiz';
 
 type GameId = 'nasty-libs' | 'dubiously-patented' | 'autism-assessment';
 
@@ -157,14 +157,20 @@ export class GameManager {
         .sort((a, b) => a.score - b.score); // Lower score = less autistic = winner
       
       const winner = rankings[0];
+      const loser = rankings[rankings.length - 1];
       const certificate = generateCertificateSVG(winner.name, rankings);
       const certificateDataUrl = `data:image/svg+xml;base64,${Buffer.from(certificate).toString('base64')}`;
+      const loserCertificate = generateMostAutisticCertificateSVG(loser.name, rankings);
+      const loserCertificateDataUrl = `data:image/svg+xml;base64,${Buffer.from(loserCertificate).toString('base64')}`;
       
       this.io.to(room.code).emit('aq_results', {
         rankings,
         winnerId: winner.id,
         winnerName: winner.name,
-        certificate: certificateDataUrl
+        certificate: certificateDataUrl,
+        loserId: loser.id,
+        loserName: loser.name,
+        loserCertificate: loserCertificateDataUrl
       });
       this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
     } else {

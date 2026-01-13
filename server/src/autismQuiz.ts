@@ -114,3 +114,73 @@ function escapeXmlForCert(str: string): string {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;');
 }
+
+// Generate a certificate for the MOST autistic player
+export function generateMostAutisticCertificateSVG(
+  loserName: string,
+  rankings: { name: string; score: number }[]
+): string {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">
+  <defs>
+    <linearGradient id="purpleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#9b59b6;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#8e44ad;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#6c3483;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="2" dy="2" stdDeviation="3" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="800" height="600" fill="#1a1a2e"/>
+  
+  <!-- Border -->
+  <rect x="20" y="20" width="760" height="560" fill="none" stroke="url(#purpleGrad)" stroke-width="8" rx="10"/>
+  <rect x="35" y="35" width="730" height="530" fill="none" stroke="url(#purpleGrad)" stroke-width="2" rx="8"/>
+  
+  <!-- Header decoration -->
+  <circle cx="400" cy="80" r="40" fill="url(#purpleGrad)" filter="url(#shadow)"/>
+  <text x="400" y="90" text-anchor="middle" font-size="36" fill="#1a1a2e">🧩</text>
+  
+  <!-- Title -->
+  <text x="400" y="160" text-anchor="middle" font-family="Georgia, serif" font-size="42" fill="url(#purpleGrad)" font-weight="bold" filter="url(#shadow)">
+    CERTIFICATE OF DISTINCTION
+  </text>
+  
+  <!-- Subtitle -->
+  <text x="400" y="200" text-anchor="middle" font-family="Georgia, serif" font-size="20" fill="#b8b8b8">
+    This certifies that
+  </text>
+  
+  <!-- Loser Name -->
+  <text x="400" y="260" text-anchor="middle" font-family="Georgia, serif" font-size="48" fill="#ffffff" font-weight="bold" filter="url(#shadow)">
+    ${escapeXmlForCert(loserName)}
+  </text>
+  
+  <!-- Award Title -->
+  <text x="400" y="310" text-anchor="middle" font-family="Georgia, serif" font-size="24" fill="#b8b8b8">
+    has been officially recognized as
+  </text>
+  
+  <text x="400" y="360" text-anchor="middle" font-family="Georgia, serif" font-size="36" fill="#a855f7" font-weight="bold" filter="url(#shadow)">
+    CERTIFIED MOST AUTISTIC
+  </text>
+  
+  <!-- Rankings section -->
+  <text x="400" y="420" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" fill="#888888">
+    GROUP RANKINGS
+  </text>
+  
+  ${rankings.slice(0, 6).map((r, i) => `
+  <text x="400" y="${450 + i * 22}" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" fill="${i === rankings.length - 1 ? '#a855f7' : '#cccccc'}">
+    ${i + 1}. ${escapeXmlForCert(r.name)} — Score: ${r.score}/20
+  </text>`).join('')}
+  
+  <!-- Footer -->
+  <text x="400" y="570" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="#666666">
+    Daniel's Dirty Game Pack • Autism Assessment™
+  </text>
+</svg>`;
+}

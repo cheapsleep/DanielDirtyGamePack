@@ -75,7 +75,7 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
   } | null>(null);
   // Autism Quiz state
   const [aqQuestion, setAqQuestion] = useState<{ questionId: number; questionText: string; questionNumber: number; totalQuestions: number } | null>(null);
-  const [aqResults, setAqResults] = useState<{ rankings: { id: string; name: string; score: number }[]; winnerId: string; winnerName: string; certificate: string } | null>(null);
+  const [aqResults, setAqResults] = useState<{ rankings: { id: string; name: string; score: number }[]; winnerId: string; winnerName: string; certificate: string; loserId: string; loserName: string; loserCertificate: string } | null>(null);
   
   useEffect(() => {
     // Update presentation data whenever a new presenter starts presenting
@@ -604,7 +604,7 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
                     </div>
                     {/* Timer */}
                     <div className={`text-6xl font-black ${timeLeft <= 10 ? 'text-red-500 animate-pulse' : 'text-yellow-400'}`}>
-                        {timeLeft}s
+                        {timeLeft}<span className="text-3xl">s</span>
                     </div>
                 </div>
                 
@@ -648,19 +648,37 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
                         <p className="text-sm text-slate-500 mt-4 text-center">Lower score = Less autistic = Winner!</p>
                     </div>
                     
-                    <div className="flex flex-col items-center justify-center">
-                        <img 
-                            src={aqResults.certificate} 
-                            alt="Certificate" 
-                            className="max-w-full rounded-lg shadow-2xl border-4 border-yellow-500"
-                        />
-                        <a
-                            href={aqResults.certificate}
-                            download={`${aqResults.winnerName}_Least_Autistic_Certificate.svg`}
-                            className="mt-6 px-6 py-3 bg-yellow-500 text-black font-bold rounded-lg hover:bg-yellow-400 transition-colors"
-                        >
-                            📥 Download Certificate
-                        </a>
+                    <div className="flex flex-col items-center justify-center gap-8">
+                        <div className="text-center">
+                            <h3 className="text-lg text-green-400 mb-2">🏆 Least Autistic</h3>
+                            <img 
+                                src={aqResults.certificate} 
+                                alt="Least Autistic Certificate" 
+                                className="max-w-full rounded-lg shadow-2xl border-4 border-yellow-500"
+                            />
+                            <a
+                                href={aqResults.certificate}
+                                download={`${aqResults.winnerName}_Least_Autistic_Certificate.svg`}
+                                className="mt-4 inline-block px-6 py-3 bg-yellow-500 text-black font-bold rounded-lg hover:bg-yellow-400 transition-colors"
+                            >
+                                📥 Download Certificate
+                            </a>
+                        </div>
+                        <div className="text-center">
+                            <h3 className="text-lg text-purple-400 mb-2">🧩 Most Autistic</h3>
+                            <img 
+                                src={aqResults.loserCertificate} 
+                                alt="Most Autistic Certificate" 
+                                className="max-w-full rounded-lg shadow-2xl border-4 border-purple-500"
+                            />
+                            <a
+                                href={aqResults.loserCertificate}
+                                download={`${aqResults.loserName}_Most_Autistic_Certificate.svg`}
+                                className="mt-4 inline-block px-6 py-3 bg-purple-500 text-white font-bold rounded-lg hover:bg-purple-400 transition-colors"
+                            >
+                                📥 Download Certificate
+                            </a>
+                        </div>
                     </div>
                 </div>
                 

@@ -152,7 +152,7 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
   const [currentPresenterId, setCurrentPresenterId] = useState<string>('');
   // Autism Quiz state
   const [aqQuestion, setAqQuestion] = useState<{ questionId: number; questionText: string; questionNumber: number; totalQuestions: number } | null>(null);
-  const [aqResults, setAqResults] = useState<{ rankings: { id: string; name: string; score: number }[]; winnerId: string; winnerName: string; certificate: string } | null>(null);
+  const [aqResults, setAqResults] = useState<{ rankings: { id: string; name: string; score: number }[]; winnerId: string; winnerName: string; certificate: string; loserId: string; loserName: string; loserCertificate: string } | null>(null);
   const [aqAnswered, setAqAnswered] = useState(false);
   const [aqTimeLeft, setAqTimeLeft] = useState(30);
 
@@ -826,7 +826,7 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
             </div>
             {/* Timer */}
             <div className={`text-4xl font-black mb-4 ${aqTimeLeft <= 10 ? 'text-red-500 animate-pulse' : 'text-yellow-400'}`}>
-              {aqTimeLeft}s
+              {aqTimeLeft}<span className="text-xl">s</span>
             </div>
             
             {!aqAnswered ? (
@@ -874,6 +874,11 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
                 <p className="text-green-400 text-xl font-bold">YOU WON!</p>
                 <p className="text-slate-400">Certified Least Autistic</p>
               </div>
+            ) : aqResults.loserId === playerId ? (
+              <div className="mb-6">
+                <p className="text-purple-400 text-xl font-bold">CONGRATULATIONS!</p>
+                <p className="text-slate-400">Certified Most Autistic</p>
+              </div>
             ) : (
               <p className="text-slate-400 mb-6">Better luck next time!</p>
             )}
@@ -902,6 +907,22 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
                 className="mb-4"
               >
                 📜 DOWNLOAD CERTIFICATE
+              </WoodenButton>
+            )}
+
+            {aqResults.loserId === playerId && (
+              <WoodenButton
+                type="button"
+                variant="wood"
+                onClick={() => {
+                  const link = document.createElement('a');
+                  link.href = aqResults.loserCertificate;
+                  link.download = 'certified-most-autistic.svg';
+                  link.click();
+                }}
+                className="mb-4"
+              >
+                🧩 DOWNLOAD CERTIFICATE
               </WoodenButton>
             )}
 
