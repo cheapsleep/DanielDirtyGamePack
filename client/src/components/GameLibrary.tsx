@@ -85,7 +85,7 @@ export default function GameLibrary({ onSelectGame }: GameLibraryProps) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-5xl mx-auto w-full pt-40">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-24 max-w-5xl mx-auto w-full pt-40">
         {games.map((game) => (
           <motion.div
             key={game.id}
