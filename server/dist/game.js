@@ -913,12 +913,18 @@ class GameManager {
             const fallbackPool = room.dpAllProblems.map(x => x.text);
             const choices = [];
             const source = pool.length > 0 ? pool : fallbackPool;
-            while (choices.length < 3) {
+            let attempts = 0;
+            while (choices.length < 3 && attempts < 100) {
+                attempts++;
                 const next = source[Math.floor(Math.random() * source.length)];
                 if (!next)
                     break;
-                if (!choices.includes(next) || source.length < 3)
+                if (!choices.includes(next))
                     choices.push(next);
+                // If we've tried many times and source doesn't have enough unique items, allow duplicates
+                if (attempts > 20 && choices.length < 3) {
+                    choices.push(next);
+                }
             }
             room.dpChoicesByPlayer[p.id] = choices;
             if (p.socketId && !p.isBot)
