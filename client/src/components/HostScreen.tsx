@@ -794,13 +794,13 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
                     </div>
                     
                     {/* Canvas */}
-                    <div className="flex-1 bg-white rounded-xl overflow-hidden flex items-center justify-center min-h-0">
+                    <div className="flex-1 overflow-hidden flex items-center justify-center min-h-0">
                         <DrawingCanvas
                             mode="view"
                             width={800}
                             height={600}
                             strokes={strokeReceiver.strokes}
-                            className="max-w-full max-h-full"
+                            className="max-w-full max-h-full rounded-xl"
                         />
                     </div>
                 </div>
