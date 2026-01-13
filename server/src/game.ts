@@ -55,6 +55,7 @@ interface Room {
   aqCurrentQuestion?: number;
   aqAnswers?: Record<string, Record<number, boolean>>; // playerId -> questionId -> agreed
   aqScores?: Record<string, number>; // playerId -> score
+  aqShuffledQuestions?: typeof autismQuizQuestions; // Shuffled questions for this game
   answers: { playerId: string; answer: string }[];
   votes: Record<string, number>; // answerIndex -> count
   votedBy?: Record<string, boolean>;
@@ -177,10 +178,11 @@ export class GameManager {
       // Next question
       room.aqCurrentQuestion = currentQ + 1;
       room.currentRound = currentQ + 1;
-      const nextQuestion = autismQuizQuestions[currentQ]; // 0-indexed, currentQ is already the next index
+      const questions = room.aqShuffledQuestions ?? autismQuizQuestions;
+      const nextQuestion = questions[currentQ]; // 0-indexed, currentQ is already the next index
       
       this.io.to(room.code).emit('aq_question', {
-        questionId: nextQuestion.id,
+        questionId: currentQ + 1,
         questionText: nextQuestion.text,
         questionNumber: currentQ + 1,
         totalQuestions: 20
@@ -305,10 +307,11 @@ export class GameManager {
     // If game is in AQ_QUESTION state, send the current question to the joining player
     if (room.state === 'AQ_QUESTION' && room.aqCurrentQuestion) {
       const questionIndex = room.aqCurrentQuestion - 1;
-      if (questionIndex >= 0 && questionIndex < autismQuizQuestions.length) {
+      const questions = room.aqShuffledQuestions ?? autismQuizQuestions;
+      if (questionIndex >= 0 && questionIndex < questions.length) {
         socket.emit('aq_question', {
           questionId: room.aqCurrentQuestion,
-          questionText: autismQuizQuestions[questionIndex].text,
+          questionText: questions[questionIndex].text,
           questionNumber: room.aqCurrentQuestion,
           totalQuestions: 20
         });
@@ -647,8 +650,9 @@ export class GameManager {
         await this.humanDelay(1500, 5000);
         if (room.state !== 'AQ_QUESTION') break;
         
-        // Random answer - bots are unpredictable
-        const agreed = Math.random() > 0.5;
+        // Random answer - bots are unpredictable (can also pick neutral)
+        const rand = Math.random();
+        const agreed: boolean | 'neutral' = rand < 0.33 ? true : rand < 0.66 ? false : 'neutral';
         this.handleAQAnswer(room, bot.socketId, currentQ, agreed);
       }
     }
@@ -796,6 +800,9 @@ export class GameManager {
       room.aqCurrentQuestion = 1;
       room.aqAnswers = {};
       room.aqScores = {};
+      // Shuffle all questions and pick the first 20 for this game (no duplicates possible)
+      const shuffled = [...autismQuizQuestions].sort(() => Math.random() - 0.5);
+      room.aqShuffledQuestions = shuffled.slice(0, 20);
       // Initialize answer tracking for all players
       for (const p of activePlayers) {
         room.aqAnswers[p.id] = {};
@@ -805,7 +812,7 @@ export class GameManager {
       this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
       this.io.to(room.code).emit('aq_question', {
         questionId: 1,
-        questionText: autismQuizQuestions[0].text,
+        questionText: room.aqShuffledQuestions[0].text,
         questionNumber: 1,
         totalQuestions: 20
       });
@@ -1120,7 +1127,7 @@ export class GameManager {
     }
   }
 
-  private handleAQAnswer(room: Room, socketId: string, questionId: number, agreed: boolean) {
+  private handleAQAnswer(room: Room, socketId: string, questionId: number, agreed: boolean | 'neutral') {
     if (room.gameId !== 'autism-assessment') return;
     if (room.state !== 'AQ_QUESTION') return;
     
@@ -1154,18 +1161,28 @@ export class GameManager {
   private calculateAQScores(room: Room) {
     room.aqScores = {};
     const activePlayers = this.getActivePlayers(room);
+    const questions = room.aqShuffledQuestions ?? autismQuizQuestions;
     
     for (const player of activePlayers) {
       let score = 0;
       const answers = room.aqAnswers?.[player.id] ?? {};
       
-      for (const question of autismQuizQuestions) {
-        const agreed = answers[question.id];
+      // Iterate through questions by their position (1-20), matching the questionId we sent
+      for (let i = 0; i < questions.length; i++) {
+        const question = questions[i];
+        const questionId = i + 1; // We use 1-based questionIds
+        const agreed = answers[questionId];
         if (agreed === undefined) continue;
         
         // Timeout penalty - counts as 1 point towards autism score
         if (agreed === ('timeout' as unknown as boolean)) {
           score++;
+          continue;
+        }
+        
+        // Neutral answer - half point
+        if (agreed === 'neutral') {
+          score += 0.5;
           continue;
         }
         
@@ -1279,6 +1296,12 @@ export class GameManager {
         return;
       }
       this.startNastyRound(room);
+      return;
+    }
+
+    if (room.gameId === 'autism-assessment') {
+      if (room.state !== 'AQ_RESULTS') return;
+      this.endGame(room);
       return;
     }
 

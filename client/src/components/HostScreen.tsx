@@ -303,7 +303,11 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
   };
 
   const title = room
-    ? (room.gameId ?? gameId) === 'dubiously-patented' ? 'Dubiously Patented' : 'Nasty Libs'
+    ? (room.gameId ?? gameId) === 'dubiously-patented' 
+      ? 'Dubiously Patented' 
+      : (room.gameId ?? gameId) === 'autism-assessment'
+        ? 'Who Is The Most Autistic?'
+        : 'Nasty Libs'
     : '';
   const isPatented = room ? (room.gameId ?? gameId) === 'dubiously-patented' : false;
   const isPromptPhase = room ? room.state === 'NL_ANSWER' : false;
@@ -622,70 +626,69 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
         )}
 
         {room.state === 'AQ_RESULTS' && aqResults && (
-            <div className="w-full h-full flex flex-col items-center justify-center">
-                <h1 className="text-5xl font-black text-green-400 mb-4">🏆 CERTIFIED LEAST AUTISTIC 🏆</h1>
-                <h2 className="text-4xl font-bold text-white mb-12">{aqResults.winnerName}</h2>
+            <div className="w-full h-full flex flex-col items-center overflow-y-auto py-8">
+                <h1 className="text-4xl font-black text-green-400 mb-2">🏆 CERTIFIED LEAST AUTISTIC 🏆</h1>
+                <h2 className="text-3xl font-bold text-white mb-6">{aqResults.winnerName}</h2>
                 
-                <div className="grid grid-cols-2 gap-12 w-full max-w-5xl">
-                    <div className="bg-slate-800 p-6 rounded-xl">
-                        <h3 className="text-xl text-slate-400 mb-4 text-center">GROUP RANKINGS</h3>
-                        <div className="space-y-3">
+                <div className="grid grid-cols-3 gap-6 w-full max-w-6xl px-4">
+                    <div className="bg-slate-800 p-4 rounded-xl">
+                        <h3 className="text-lg text-slate-400 mb-3 text-center">GROUP RANKINGS</h3>
+                        <div className="space-y-2">
                             {aqResults.rankings.map((r, idx) => (
                                 <div 
                                     key={r.id} 
-                                    className={`flex justify-between items-center p-4 rounded-lg ${idx === 0 ? 'bg-green-900/50 border-2 border-green-500' : 'bg-slate-900'}`}
+                                    className={`flex justify-between items-center p-2 rounded-lg ${idx === 0 ? 'bg-green-900/50 border border-green-500' : idx === aqResults.rankings.length - 1 ? 'bg-purple-900/50 border border-purple-500' : 'bg-slate-900'}`}
                                 >
-                                    <div className="flex items-center gap-4">
-                                        <span className="text-2xl font-bold w-8">{idx + 1}</span>
-                                        <span className="text-xl">{r.name}</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-lg font-bold w-6">{idx + 1}</span>
+                                        <span className="text-base">{r.name}</span>
                                     </div>
-                                    <span className={`text-xl font-bold ${idx === 0 ? 'text-green-400' : idx === aqResults.rankings.length - 1 ? 'text-red-400' : 'text-slate-400'}`}>
+                                    <span className={`text-base font-bold ${idx === 0 ? 'text-green-400' : idx === aqResults.rankings.length - 1 ? 'text-purple-400' : 'text-slate-400'}`}>
                                         {r.score}/20
                                     </span>
                                 </div>
                             ))}
                         </div>
-                        <p className="text-sm text-slate-500 mt-4 text-center">Lower score = Less autistic = Winner!</p>
+                        <p className="text-xs text-slate-500 mt-3 text-center">Lower score = Less autistic = Winner!</p>
                     </div>
                     
-                    <div className="flex flex-col items-center justify-center gap-8">
-                        <div className="text-center">
-                            <h3 className="text-lg text-green-400 mb-2">🏆 Least Autistic</h3>
-                            <img 
-                                src={aqResults.certificate} 
-                                alt="Least Autistic Certificate" 
-                                className="max-w-full rounded-lg shadow-2xl border-4 border-yellow-500"
-                            />
-                            <a
-                                href={aqResults.certificate}
-                                download={`${aqResults.winnerName}_Least_Autistic_Certificate.svg`}
-                                className="mt-4 inline-block px-6 py-3 bg-yellow-500 text-black font-bold rounded-lg hover:bg-yellow-400 transition-colors"
-                            >
-                                📥 Download Certificate
-                            </a>
-                        </div>
-                        <div className="text-center">
-                            <h3 className="text-lg text-purple-400 mb-2">🧩 Most Autistic</h3>
-                            <img 
-                                src={aqResults.loserCertificate} 
-                                alt="Most Autistic Certificate" 
-                                className="max-w-full rounded-lg shadow-2xl border-4 border-purple-500"
-                            />
-                            <a
-                                href={aqResults.loserCertificate}
-                                download={`${aqResults.loserName}_Most_Autistic_Certificate.svg`}
-                                className="mt-4 inline-block px-6 py-3 bg-purple-500 text-white font-bold rounded-lg hover:bg-purple-400 transition-colors"
-                            >
-                                📥 Download Certificate
-                            </a>
-                        </div>
+                    <div className="flex flex-col items-center">
+                        <h3 className="text-base text-green-400 mb-2">🏆 Least Autistic</h3>
+                        <img 
+                            src={aqResults.certificate} 
+                            alt="Least Autistic Certificate" 
+                            className="w-full rounded-lg shadow-xl border-2 border-yellow-500"
+                        />
+                        <a
+                            href={aqResults.certificate}
+                            download={`${aqResults.winnerName}_Least_Autistic_Certificate.svg`}
+                            className="mt-3 px-4 py-2 bg-yellow-500 text-black text-sm font-bold rounded-lg hover:bg-yellow-400 transition-colors"
+                        >
+                            📥 Download
+                        </a>
+                    </div>
+                    
+                    <div className="flex flex-col items-center">
+                        <h3 className="text-base text-purple-400 mb-2">🧩 Most Autistic</h3>
+                        <img 
+                            src={aqResults.loserCertificate} 
+                            alt="Most Autistic Certificate" 
+                            className="w-full rounded-lg shadow-xl border-2 border-purple-500"
+                        />
+                        <a
+                            href={aqResults.loserCertificate}
+                            download={`${aqResults.loserName}_Most_Autistic_Certificate.svg`}
+                            className="mt-3 px-4 py-2 bg-purple-500 text-white text-sm font-bold rounded-lg hover:bg-purple-400 transition-colors"
+                        >
+                            📥 Download
+                        </a>
                     </div>
                 </div>
                 
                 <WoodenButton 
                   variant="red"
                   onClick={handleBack}
-                  className="mt-12"
+                  className="mt-6"
                 >
                   BACK TO MENU
                 </WoodenButton>

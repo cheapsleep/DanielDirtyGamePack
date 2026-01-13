@@ -835,7 +835,7 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
             {!aqAnswered ? (
               <>
                 <p className="text-xl mb-8 px-4">{aqQuestion.questionText}</p>
-                <div className="flex gap-4 justify-center">
+                <div className="flex gap-3 justify-center flex-wrap">
                   <WoodenButton 
                     type="button" 
                     variant="wood" 
@@ -843,9 +843,20 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
                       socket.emit('game_action', { action: 'AQ_ANSWER', questionId: aqQuestion.questionId, agreed: true });
                       setAqAnswered(true);
                     }}
-                    className="px-8 py-4 text-lg"
+                    className="px-6 py-4 text-lg"
                   >
                     AGREE
+                  </WoodenButton>
+                  <WoodenButton 
+                    type="button" 
+                    variant="wood" 
+                    onClick={() => {
+                      socket.emit('game_action', { action: 'AQ_ANSWER', questionId: aqQuestion.questionId, agreed: 'neutral' });
+                      setAqAnswered(true);
+                    }}
+                    className="px-6 py-4 text-lg opacity-80"
+                  >
+                    NEUTRAL
                   </WoodenButton>
                   <WoodenButton 
                     type="button" 
@@ -854,7 +865,7 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
                       socket.emit('game_action', { action: 'AQ_ANSWER', questionId: aqQuestion.questionId, agreed: false });
                       setAqAnswered(true);
                     }}
-                    className="px-8 py-4 text-lg"
+                    className="px-6 py-4 text-lg"
                   >
                     DISAGREE
                   </WoodenButton>

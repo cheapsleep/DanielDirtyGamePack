@@ -24,7 +24,7 @@ export default function GameLibrary({ onSelectGame }: GameLibraryProps) {
     },
     {
       id: 'autism-assessment',
-      title: 'AUTISM ASSESSMENT',
+      title: 'WHO IS THE MOST AUTISTIC?',
       description: 'A 20-question quiz to determine who in your group is the most neurotypical. The least autistic player wins a certificate!',
       color: 'bg-blue-600',
       logo: '/assets/Autism_Assessment_Logo.png',
