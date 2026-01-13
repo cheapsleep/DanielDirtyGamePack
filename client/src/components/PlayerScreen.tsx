@@ -235,7 +235,10 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
         rankings: data.rankings,
         winnerId: data.winnerId,
         winnerName: data.winnerName,
-        certificate: data.certificate
+        certificate: data.certificate,
+        loserId: data.loserId,
+        loserName: data.loserName,
+        loserCertificate: data.loserCertificate
       });
     });
 
