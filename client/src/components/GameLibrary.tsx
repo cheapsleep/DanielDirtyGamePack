@@ -84,21 +84,21 @@ export default function GameLibrary({ onSelectGame }: GameLibraryProps) {
             whileHover={{ scale: 1.02, y: -5 }}
             className="stone-card rounded-xl overflow-hidden shadow-2xl flex flex-col relative z-10"
           >
-            <div className={`h-48 ${game.color} flex items-center justify-center p-4 relative overflow-hidden`}> 
+            <div className={`h-64 ${game.color} flex items-center justify-center p-6 relative overflow-hidden`}> 
               <div className="absolute inset-0 bg-black opacity-20"></div>
               <div className="card-rock rock-top-left" aria-hidden></div>
               <div className="card-rock rock-bottom-right" aria-hidden></div>
               {game.logo ? (
-                 <img src={game.logo} alt={game.title} className="max-h-full max-w-full relative z-10 transform -rotate-6 drop-shadow-2xl" />
+                 <img src={game.logo} alt={game.title} className="max-h-[200px] max-w-full relative z-10 transform -rotate-6 drop-shadow-2xl" />
               ) : (
-                <h2 className="text-4xl font-black text-white relative z-10 text-center transform -rotate-6">
+                <h2 className="text-5xl font-black text-white relative z-10 text-center transform -rotate-6">
                   {game.title}
                 </h2>
               )}
             </div>
             <div className="p-6 flex-1 flex flex-col justify-between">
               <div>
-                <h3 className="text-xl font-bold text-white mb-2">{game.title}</h3>
+                <h3 className="text-3xl font-bold text-white mb-2">{game.title}</h3>
                 <p className="text-sm text-slate-400 mb-3">👥 {game.minPlayers}+ players</p>
                 <p className="text-slate-300 text-lg mb-6 leading-relaxed">
                     {game.description}
