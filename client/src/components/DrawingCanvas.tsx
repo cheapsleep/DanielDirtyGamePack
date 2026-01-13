@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useCallback } from 'react';
+import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 
 interface Point {
   x: number;
@@ -326,5 +326,11 @@ export function useStrokeReceiver() {
     setStrokes(newStrokes);
   }, []);
   
-  return { strokes, addCompleteStroke, clearStrokes, setAllStrokes };
+  // Memoize the return object to prevent unnecessary re-renders
+  return useMemo(() => ({ 
+    strokes, 
+    addCompleteStroke, 
+    clearStrokes, 
+    setAllStrokes 
+  }), [strokes, addCompleteStroke, clearStrokes, setAllStrokes]);
 }

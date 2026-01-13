@@ -5,7 +5,7 @@ type WoodenButtonProps = Omit<HTMLMotionProps<'button'>, 'children'> & {
   children: React.ReactNode;
 };
 
-export default function WoodenButton({ variant = 'wood', children, className, ...props }: WoodenButtonProps) {
+export default function WoodenButton({ variant = 'wood', children, className, type = 'button', ...props }: WoodenButtonProps) {
   
   // Base wood style
   let bgClass = 'bg-[#8B5A2B]';
@@ -41,6 +41,7 @@ export default function WoodenButton({ variant = 'wood', children, className, ..
 
   return (
     <motion.button
+      type={type}
       whileHover={{ scale: 1.05, y: -2 }}
       whileTap={{ scale: 0.98, y: 2 }}
       className={`

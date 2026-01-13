@@ -205,19 +205,24 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
       if (data?.gameId) setGameId(String(data.gameId));
     });
 
+    // Track the previous state for comparison
+    let prevState: string | undefined;
+    
     socket.on('room_update', (nextRoom: any) => {
-      setRoom((prevRoom: RoomPublicState | null) => {
-        // Only reset drafts/submitted when game state actually changes
-        if (prevRoom?.state !== nextRoom?.state) {
-          setSubmitted(false);
-          setAnswerDraft('');
-          setPromptDraft('');
-          setDpSelected('');
-          if (nextRoom?.state !== 'DP_PICK') setDpChoices([]);
-        }
-        return nextRoom;
-      });
+      const stateChanged = prevState !== nextRoom?.state;
+      prevState = nextRoom?.state;
+      
+      setRoom(nextRoom);
       if (nextRoom?.gameId) setGameId(String(nextRoom.gameId));
+      
+      // Only reset drafts/submitted when game state actually changes
+      if (stateChanged) {
+        setSubmitted(false);
+        setAnswerDraft('');
+        setPromptDraft('');
+        setDpSelected('');
+        if (nextRoom?.state !== 'DP_PICK') setDpChoices([]);
+      }
     });
 
     socket.on('new_prompt', (data) => {
@@ -1107,7 +1112,7 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
 
         {/* Scribble Scrabble - Drawing (Drawer) */}
         {gameState === 'SC_DRAWING' && room?.scDrawerId === playerId && (
-          <div className="w-full max-w-2xl mx-auto">
+          <div className="w-full max-w-lg mx-auto">
             <div className="text-center mb-4">
               <div className="text-4xl font-bold text-orange-400 mb-1">
                 {scTimeLeft}<span className="text-xl">s</span>
@@ -1117,14 +1122,15 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
             
             <ScribbleCanvas
               mode="draw"
-              width={600}
-              height={400}
+              width={400}
+              height={300}
               onStroke={(stroke: { points: { x: number; y: number }[]; color: string; width: number }) => {
                 socket.emit('game_action', { action: 'SC_DRAW_STROKE', stroke });
               }}
               onClear={() => {
                 socket.emit('game_action', { action: 'SC_CLEAR_CANVAS' });
               }}
+              className="mx-auto"
             />
             
             <div className="mt-4 flex justify-center">

@@ -125,7 +125,8 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
       setScGuessChat([]);
       strokeReceiver.clearStrokes();
     }
-  }, [room?.state, room?.scCurrentRound, strokeReceiver]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room?.state, room?.scCurrentRound]);
 
   const roomCode = room?.code;
   const joinBase =
@@ -793,12 +794,13 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
                     </div>
                     
                     {/* Canvas */}
-                    <div className="flex-1 bg-white rounded-xl overflow-hidden flex items-center justify-center">
+                    <div className="flex-1 bg-white rounded-xl overflow-hidden flex items-center justify-center min-h-0">
                         <DrawingCanvas
                             mode="view"
                             width={800}
                             height={500}
                             strokes={strokeReceiver.strokes}
+                            className="max-w-full max-h-full"
                         />
                     </div>
                 </div>
