@@ -14,6 +14,7 @@ export default function GameLibrary({ onSelectGame }: GameLibraryProps) {
       description: 'A wildly inappropriate spoof of Mad Libs. Fill in the blanks with the worst things you can think of.',
       color: 'bg-pink-600',
       logo: '/assets/Nasty_Libs_Logo.svg',
+      minPlayers: 3,
     },
     {
       id: 'dubiously-patented',
@@ -21,6 +22,7 @@ export default function GameLibrary({ onSelectGame }: GameLibraryProps) {
       description: 'A spoof of idea-pitch games. Solve dumb problems with even dumber inventions, then vote for the best disaster.',
       color: 'bg-emerald-600',
       logo: '/assets/Dubiously_Patented_Logo.png',
+      minPlayers: 3,
     },
     {
       id: 'autism-assessment',
@@ -28,6 +30,7 @@ export default function GameLibrary({ onSelectGame }: GameLibraryProps) {
       description: 'A 20-question quiz to determine who in your group is the most neurotypical. The least autistic player wins a certificate!',
       color: 'bg-blue-600',
       logo: '/assets/Autism_Assessment_Logo.png',
+      minPlayers: 2,
     },
   ];
 
@@ -95,6 +98,8 @@ export default function GameLibrary({ onSelectGame }: GameLibraryProps) {
             </div>
             <div className="p-6 flex-1 flex flex-col justify-between">
               <div>
+                <h3 className="text-xl font-bold text-white mb-2">{game.title}</h3>
+                <p className="text-sm text-slate-400 mb-3">👥 {game.minPlayers}+ players</p>
                 <p className="text-slate-300 text-lg mb-6 leading-relaxed">
                     {game.description}
                 </p>
