@@ -89,14 +89,14 @@ export default function GameLibrary({ onSelectGame }: GameLibraryProps) {
               <div className="card-rock rock-top-left" aria-hidden></div>
               <div className="card-rock rock-bottom-right" aria-hidden></div>
               {game.logo ? (
-                 <img src={game.logo} alt={game.title} className="max-h-96 max-w-[120%] object-contain relative z-10 drop-shadow-2xl translate-y-16" />
+                 <img src={game.logo} alt={game.title} className="max-h-96 max-w-[120%] object-contain relative z-0 drop-shadow-2xl translate-y-16" />
               ) : (
                 <h2 className="text-5xl font-black text-white relative z-10 text-center transform -rotate-6">
                   {game.title}
                 </h2>
               )}
             </div>
-            <div className="p-4 flex-1 flex flex-col justify-between">
+            <div className="p-4 flex-1 flex flex-col justify-between relative z-10 bg-stone-800 rounded-b-xl">
               <div>
                 <h3 className="text-2xl font-bold text-white mb-1">{game.title}</h3>
                 <p className="text-sm text-slate-400 mb-2">👥 {game.minPlayers}+ players</p>
