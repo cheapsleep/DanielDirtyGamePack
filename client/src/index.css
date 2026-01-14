@@ -20,8 +20,10 @@
     font-family: 'JelloStone', system-ui, sans-serif !important;
   }
 
+
   body {
     @apply bg-slate-900 text-white;
+  }
 }
 
 @layer components {
