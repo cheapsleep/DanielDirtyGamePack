@@ -35,6 +35,7 @@ interface Room {
   hostConnected: boolean;
   controllerPlayerId?: string;
   players: Player[];
+  createdAt: number;
   state:
     | 'LOBBY'
     | 'NL_PROMPT_SUBMIT'
@@ -257,7 +258,8 @@ export class GameManager {
       totalRounds: 0,
       answers: [],
       votes: {},
-      votedBy: {}
+      votedBy: {},
+      createdAt: Date.now()
     };
 
     this.rooms.set(roomCode, newRoom);
@@ -979,6 +981,7 @@ export class GameManager {
       code: newCode,
       gameId: 'nasty-libs',
       hostSocketId: room.hostSocketId,
+      hostKey: room.hostKey,
       hostConnected: room.hostConnected,
       players: [],
       state: 'LOBBY',

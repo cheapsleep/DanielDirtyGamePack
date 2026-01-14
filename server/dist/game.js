@@ -155,7 +155,8 @@ class GameManager {
             totalRounds: 0,
             answers: [],
             votes: {},
-            votedBy: {}
+            votedBy: {},
+            createdAt: Date.now()
         };
         this.rooms.set(roomCode, newRoom);
         this.socketRoomMap.set(socket.id, roomCode);
@@ -380,6 +381,18 @@ class GameManager {
             case 'NEXT_ROUND':
                 if (this.isControllerSocket(room, socket.id)) {
                     this.nextRound(room);
+                }
+                break;
+            case 'PLAY_AGAIN':
+                // Return to lobby with same players
+                if (this.isControllerSocket(room, socket.id)) {
+                    this.resetToLobby(room);
+                }
+                break;
+            case 'NEW_LOBBY':
+                // Create a brand new lobby (players need to rejoin)
+                if (this.isControllerSocket(room, socket.id)) {
+                    this.createNewLobby(room, socket);
                 }
                 break;
         }
@@ -774,6 +787,111 @@ class GameManager {
                 clearTimeout(timeout);
             }
         });
+    }
+    resetToLobby(room) {
+        // Reset room to lobby state, keeping all players
+        room.state = 'LOBBY';
+        room.currentRound = 0;
+        room.totalRounds = 0;
+        room.answers = [];
+        room.votes = {};
+        room.votedBy = {};
+        // Reset all player scores
+        for (const player of room.players) {
+            player.score = 0;
+        }
+        // Clear game-specific state
+        // Nasty Libs
+        room.nastyContestantIds = undefined;
+        room.nastyPromptSubmissions = undefined;
+        room.promptText = undefined;
+        // Dubiously Patented
+        room.dpProblemsByPlayer = undefined;
+        room.dpAllProblems = undefined;
+        room.dpChoicesByPlayer = undefined;
+        room.dpSelectedByPlayer = undefined;
+        room.dpDrawings = undefined;
+        room.presentationOrder = undefined;
+        room.currentPresenterId = undefined;
+        room.currentInvestments = undefined;
+        // Autism Quiz
+        room.aqCurrentQuestion = undefined;
+        room.aqAnswers = undefined;
+        room.aqScores = undefined;
+        room.aqShuffledQuestions = undefined;
+        // Scribble Scrabble
+        room.scDrawerId = undefined;
+        room.scWord = undefined;
+        room.scRevealedIndices = undefined;
+        room.scCorrectGuessers = undefined;
+        room.scScores = undefined;
+        room.scDrawerOrder = undefined;
+        room.scWordOptions = undefined;
+        room.scDrawingStrokes = undefined;
+        room.scCurrentRound = undefined;
+        room.scTotalRounds = undefined;
+        room.scRoundTime = undefined;
+        room.scGuessChat = undefined;
+        // Card Calamity
+        room.ccDeck = undefined;
+        room.ccDiscardPile = undefined;
+        room.ccPlayerHands = undefined;
+        room.ccCurrentPlayerId = undefined;
+        room.ccDirection = undefined;
+        room.ccDrawStack = undefined;
+        room.ccActiveColor = undefined;
+        room.ccTurnOrder = undefined;
+        room.ccLastAction = undefined;
+        room.ccPendingWildPlayerId = undefined;
+        room.ccWinnerId = undefined;
+        // Clear any running timers using the timer maps
+        this.clearAQTimer(room.code);
+        this.clearSCTimer(room.code);
+        this.clearCCTimer(room.code);
+        this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+    }
+    createNewLobby(room, socket) {
+        // Clear timers before closing
+        this.clearAQTimer(room.code);
+        this.clearSCTimer(room.code);
+        this.clearCCTimer(room.code);
+        // Notify all players that the lobby is being closed
+        this.io.to(room.code).emit('lobby_closed');
+        // Remove all players from the room
+        for (const player of room.players) {
+            if (player.socketId) {
+                this.socketRoomMap.delete(player.socketId);
+            }
+        }
+        // Delete the old room
+        this.rooms.delete(room.code);
+        // Create a new room with a new code
+        const newCode = this.generateRoomCode();
+        const newRoom = {
+            code: newCode,
+            gameId: 'nasty-libs',
+            hostSocketId: room.hostSocketId,
+            hostKey: room.hostKey,
+            hostConnected: room.hostConnected,
+            players: [],
+            state: 'LOBBY',
+            currentRound: 0,
+            totalRounds: 0,
+            answers: [],
+            votes: {},
+            votedBy: {},
+            createdAt: Date.now(),
+        };
+        this.rooms.set(newCode, newRoom);
+        // Notify the host of the new room
+        if (room.hostSocketId) {
+            const hostSocket = this.io.sockets.sockets.get(room.hostSocketId);
+            if (hostSocket) {
+                hostSocket.leave(room.code);
+                hostSocket.join(newCode);
+                hostSocket.emit('new_lobby_created', { code: newCode });
+            }
+        }
     }
     startGame(room) {
         const activePlayers = this.getActivePlayers(room);
@@ -1566,31 +1684,33 @@ class GameManager {
     }
     // ==================== END SCRIBBLE SCRABBLE METHODS ====================
     // ==================== CARD CALAMITY METHODS ====================
-    createCCDeck() {
+    createCCDeck(numDecks = 1) {
         const deck = [];
         const colors = ['red', 'blue', 'green', 'yellow'];
-        for (const color of colors) {
-            // One 0 card per color
-            deck.push({ id: (0, uuid_1.v4)(), color, type: 'number', value: 0 });
-            // Two of each 1-9 per color
-            for (let i = 1; i <= 9; i++) {
-                deck.push({ id: (0, uuid_1.v4)(), color, type: 'number', value: i });
-                deck.push({ id: (0, uuid_1.v4)(), color, type: 'number', value: i });
+        for (let d = 0; d < numDecks; d++) {
+            for (const color of colors) {
+                // One 0 card per color per deck
+                deck.push({ id: (0, uuid_1.v4)(), color, type: 'number', value: 0 });
+                // Two of each 1-9 per color per deck
+                for (let i = 1; i <= 9; i++) {
+                    deck.push({ id: (0, uuid_1.v4)(), color, type: 'number', value: i });
+                    deck.push({ id: (0, uuid_1.v4)(), color, type: 'number', value: i });
+                }
+                // Two Skip, Reverse, Draw2 per color per deck
+                for (let i = 0; i < 2; i++) {
+                    deck.push({ id: (0, uuid_1.v4)(), color, type: 'skip' });
+                    deck.push({ id: (0, uuid_1.v4)(), color, type: 'reverse' });
+                    deck.push({ id: (0, uuid_1.v4)(), color, type: 'draw2' });
+                }
             }
-            // Two Skip, Reverse, Draw2 per color
-            for (let i = 0; i < 2; i++) {
-                deck.push({ id: (0, uuid_1.v4)(), color, type: 'skip' });
-                deck.push({ id: (0, uuid_1.v4)(), color, type: 'reverse' });
-                deck.push({ id: (0, uuid_1.v4)(), color, type: 'draw2' });
+            // 4 Wild cards per deck
+            for (let i = 0; i < 4; i++) {
+                deck.push({ id: (0, uuid_1.v4)(), color: null, type: 'wild' });
             }
-        }
-        // 4 Wild cards
-        for (let i = 0; i < 4; i++) {
-            deck.push({ id: (0, uuid_1.v4)(), color: null, type: 'wild' });
-        }
-        // 4 Wild Draw Four cards
-        for (let i = 0; i < 4; i++) {
-            deck.push({ id: (0, uuid_1.v4)(), color: null, type: 'wild4' });
+            // 4 Wild Draw Four cards per deck
+            for (let i = 0; i < 4; i++) {
+                deck.push({ id: (0, uuid_1.v4)(), color: null, type: 'wild4' });
+            }
         }
         return deck;
     }
@@ -1605,8 +1725,12 @@ class GameManager {
     startCardCalamity(room) {
         var _a, _b;
         const activePlayers = this.getActivePlayers(room);
+        // Emit game start event for dealing animation
+        this.io.to(room.code).emit('cc_game_start', { playerCount: activePlayers.length });
+        // Calculate number of decks: 1 deck for 2-3 players, 2 for 4-5, 3 for 6-7, etc.
+        const numDecks = Math.max(1, Math.ceil(activePlayers.length / 2));
         // Create and shuffle deck
-        room.ccDeck = this.shuffleDeck(this.createCCDeck());
+        room.ccDeck = this.shuffleDeck(this.createCCDeck(numDecks));
         room.ccDiscardPile = [];
         room.ccPlayerHands = {};
         room.ccDirection = 1;
@@ -1835,6 +1959,8 @@ class GameManager {
                     const topCard = room.ccDiscardPile.pop();
                     room.ccDeck = this.shuffleDeck(room.ccDiscardPile);
                     room.ccDiscardPile = [topCard];
+                    // Notify clients about the shuffle
+                    this.io.to(room.code).emit('cc_deck_shuffled');
                 }
                 else {
                     // No cards left anywhere
