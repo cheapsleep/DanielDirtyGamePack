@@ -98,7 +98,6 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
   const [timeLeft, setTimeLeft] = useState<number>(0);
   const [error, setError] = useState<string>('');
   const [retryKey, setRetryKey] = useState(0);
-  const [shortUrl, setShortUrl] = useState<string>('');
   const [presentationData, setPresentationData] = useState<{
       presenterId: string;
       drawing: string;
@@ -157,25 +156,10 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
     window.location.origin;
   const publicServerUrl =
     ((import.meta as any)?.env?.VITE_PUBLIC_SERVER_URL as string | undefined) ?? socketServerUrl;
-  const joinUrl = roomCode ? `${joinBase}#/join?room=${roomCode}${
-    publicServerUrl ? `&server=${encodeURIComponent(publicServerUrl)}` : ''
+  // Clean URL format: /join/ABCD with optional server param
+  const joinUrl = roomCode ? `${joinBase}/join/${roomCode}${
+    publicServerUrl ? `?server=${encodeURIComponent(publicServerUrl)}` : ''
   }` : '';
-
-  useEffect(() => {
-    if (shortUrl || !joinUrl) return;
-    
-    // Attempt to shorten URL
-    fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(joinUrl)}`)
-      .then(res => res.text())
-      .then(text => {
-        if (text.startsWith('http')) {
-          setShortUrl(text);
-        }
-      })
-      .catch(() => {
-        // Fallback to long URL silently
-      });
-  }, [joinUrl, shortUrl]);
 
   useEffect(() => {
     const storageKey = `host:${gameId}`;
@@ -417,7 +401,6 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
   const isVotingPhase = room ? room.state === 'NL_VOTING' : false;
   const isResultsPhase = room ? room.state === 'NL_RESULTS' || room.state === 'DP_RESULTS' : false;
   const isNastySetup = room ? room.state === 'NL_PROMPT_SUBMIT' : false;
-  const displayUrl = shortUrl || joinUrl;
   
   const controllerName = room
     ? room.players.find(p => p.id === room.controllerPlayerId)?.name ?? 'Nobody yet'
@@ -458,14 +441,14 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
       <div className="flex justify-between items-center mb-8 border-b border-slate-700 pb-4">
         <div>
           <h2 className="text-xl text-slate-400">JOIN AT</h2>
-          <h1 className="text-4xl font-bold text-blue-400">{displayUrl}</h1>
+          <h1 className="text-4xl font-bold text-blue-400">{joinUrl}</h1>
           <div className="flex items-center gap-4 mt-3">
             {joinUrl && (
               <QRCodeSVG value={joinUrl} size={96} bgColor="#ffffff" fgColor="#000000" className="p-1 bg-white rounded" />
             )}
             <div>
               <div className="text-sm text-slate-500 uppercase tracking-widest break-words">{title}</div>
-              <div className="text-xs text-slate-400 mt-2 break-words">{shortUrl || joinUrl}</div>
+              <div className="text-xs text-slate-400 mt-2 break-words">{joinUrl}</div>
             </div>
           </div>
         </div>

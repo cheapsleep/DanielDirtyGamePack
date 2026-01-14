@@ -8,8 +8,12 @@ import GameLibrary from './components/GameLibrary';
 
 type View = 'SPLASH' | 'TITLE' | 'LIBRARY' | 'HOST' | 'PLAYER';
 
+function isJoinRoute() {
+  return window.location.pathname.startsWith('/join') || window.location.hash.startsWith('#/join');
+}
+
 function App() {
-  const [isJoin, setIsJoin] = useState<boolean>(() => window.location.hash.startsWith('#/join'));
+  const [isJoin, setIsJoin] = useState<boolean>(isJoinRoute);
   const [view, setView] = useState<View>('SPLASH');
   const [selectedGame, setSelectedGame] = useState<string | null>(null);
 
@@ -32,11 +36,15 @@ function App() {
   }, []);
 
   useEffect(() => {
-    function onHashChange() {
-      setIsJoin(window.location.hash.startsWith('#/join'));
+    function onRouteChange() {
+      setIsJoin(isJoinRoute());
     }
-    window.addEventListener('hashchange', onHashChange);
-    return () => window.removeEventListener('hashchange', onHashChange);
+    window.addEventListener('hashchange', onRouteChange);
+    window.addEventListener('popstate', onRouteChange);
+    return () => {
+      window.removeEventListener('hashchange', onRouteChange);
+      window.removeEventListener('popstate', onRouteChange);
+    };
   }, []);
 
   const handleSplashComplete = () => {

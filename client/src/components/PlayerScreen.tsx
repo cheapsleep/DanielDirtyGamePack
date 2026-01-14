@@ -203,12 +203,19 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
   const [ccSelectedCardId, setCcSelectedCardId] = useState<string | null>(null);
 
   useEffect(() => {
-    const hash = window.location.hash;
-    const qIndex = hash.indexOf('?');
-    if (qIndex !== -1) {
-      const params = new URLSearchParams(hash.slice(qIndex + 1));
-      const room = params.get('room');
-      if (room) setRoomCode(room.toUpperCase());
+    // Check pathname first: /join/ABCD
+    const pathMatch = window.location.pathname.match(/^\/join\/([A-Za-z0-9]+)/);
+    if (pathMatch) {
+      setRoomCode(pathMatch[1].toUpperCase());
+    } else {
+      // Fallback to hash: #/join?room=ABCD
+      const hash = window.location.hash;
+      const qIndex = hash.indexOf('?');
+      if (qIndex !== -1) {
+        const params = new URLSearchParams(hash.slice(qIndex + 1));
+        const room = params.get('room');
+        if (room) setRoomCode(room.toUpperCase());
+      }
     }
 
     socket.on('joined', (data: any) => {
