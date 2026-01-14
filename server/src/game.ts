@@ -135,9 +135,26 @@ export class GameManager {
   private scTimers: Map<string, NodeJS.Timeout> = new Map(); // roomCode -> timer (Scribble Scrabble)
   private sssTimers: Map<string, NodeJS.Timeout> = new Map(); // roomCode -> timer (Scribble Scrabble: Scrambled)
   private ccTimers: Map<string, NodeJS.Timeout> = new Map(); // roomCode -> timer (Card Calamity)
+  private recentlyClosed: Map<string, NodeJS.Timeout> = new Map(); // roomCode -> timeout that prevents immediate reuse
+  private hostDisconnectTimers: Map<string, NodeJS.Timeout> = new Map(); // roomCode -> timeout for auto-close on host disconnect
+  private ROOM_REUSE_DELAY_MS: number = 5000;
+  private HOST_DISCONNECT_TIMEOUT_MS: number = 0; // 0 = disabled
 
   constructor(io: Server) {
     this.io = io;
+    // Allow overrides via environment
+    try {
+      this.ROOM_REUSE_DELAY_MS = Number(process.env.ROOM_REUSE_DELAY_MS ?? String(this.ROOM_REUSE_DELAY_MS));
+    } catch (_) {}
+    try {
+      // Accept either milliseconds or seconds via HOST_DISCONNECT_TIMEOUT (seconds)
+      const raw = process.env.HOST_DISCONNECT_TIMEOUT_MS ?? process.env.HOST_DISCONNECT_TIMEOUT;
+      if (raw) {
+        const asNum = Number(raw);
+        // If value looks small (< 1000) assume seconds
+        this.HOST_DISCONNECT_TIMEOUT_MS = asNum > 1000 ? asNum : asNum * 1000;
+      }
+    } catch (_) {}
   }
 
   private startAQTimer(room: Room) {
@@ -325,6 +342,12 @@ export class GameManager {
 
       room.hostSocketId = socket.id;
       room.hostConnected = true;
+      // Clear any pending host-disconnect auto-close timer
+      try {
+        const pending = this.hostDisconnectTimers.get(room.code);
+        if (pending) { clearTimeout(pending); this.hostDisconnectTimers.delete(room.code); }
+      } catch (_) {}
+
       socket.emit('host_joined', { roomCode: room.code, gameId: room.gameId });
     } else {
       // Player join
@@ -412,12 +435,56 @@ export class GameManager {
     if (!room) return;
     if (room.hostSocketId !== socket.id) return;
 
-    this.io.to(roomCode).emit('room_closed');
+    // Use centralized close logic to ensure thorough cleanup
+    this.closeRoom(roomCode, { initiatedBy: 'host', initiatorSocketId: socket.id });
+  }
+
+  private closeRoom(roomCode: string, opts?: { initiatedBy?: string; initiatorSocketId?: string }) {
+    const room = this.rooms.get(roomCode);
+    if (!room) return;
+
+    // 1) Clear all timers for this room
+    try { this.clearAQTimer(roomCode); } catch (_) {}
+    try { this.clearSCTimer(roomCode); } catch (_) {}
+    try { this.clearSSSTimer(roomCode); } catch (_) {}
+    try { this.clearCCTimer(roomCode); } catch (_) {}
+
+    // Ensure any bot run state cleared
+    try { this.botRun.delete(roomCode); } catch (_) {}
+
+    // 2) Emit a payloaded room_closed event for clients
+    try { this.io.to(roomCode).emit('room_closed', { roomCode }); } catch (_) {}
+
+    // 3) Force member sockets to leave and clear socketRoomMap entries
+    for (const [socketId, code] of Array.from(this.socketRoomMap.entries())) {
+      if (code === roomCode) {
+        const s = this.io.sockets.sockets.get(socketId as string);
+        if (s) {
+          try { s.leave(roomCode); } catch (_) {}
+          try { s.emit('room_closed', { roomCode }); } catch (_) {}
+        }
+        this.socketRoomMap.delete(socketId);
+      }
+    }
+
+    // 4) Delete the room
     this.rooms.delete(roomCode);
 
-    for (const [socketId, code] of this.socketRoomMap.entries()) {
-      if (code === roomCode) this.socketRoomMap.delete(socketId);
-    }
+    // 5) Prevent immediate reuse by marking recently closed and scheduling deletion
+    try {
+      const existing = this.recentlyClosed.get(roomCode);
+      if (existing) { clearTimeout(existing); }
+      const t = setTimeout(() => {
+        this.recentlyClosed.delete(roomCode);
+      }, this.ROOM_REUSE_DELAY_MS);
+      this.recentlyClosed.set(roomCode, t);
+    } catch (_) {}
+
+    // 6) Clear any host-disconnect timer for this room
+    try {
+      const h = this.hostDisconnectTimers.get(roomCode);
+      if (h) { clearTimeout(h); this.hostDisconnectTimers.delete(roomCode); }
+    } catch (_) {}
   }
 
   handleGameAction(socket: Socket, data: any) {
@@ -557,7 +624,20 @@ export class GameManager {
             // Host disconnected
             console.log('Host disconnected from room ' + roomCode);
             room.hostConnected = false;
-            // Optionally close room or wait for reconnect
+            // Optionally schedule auto-close of orphaned room
+            if (this.HOST_DISCONNECT_TIMEOUT_MS && this.HOST_DISCONNECT_TIMEOUT_MS > 0) {
+              try {
+                const existing = this.hostDisconnectTimers.get(roomCode);
+                if (existing) { clearTimeout(existing); }
+                const t = setTimeout(() => {
+                  const latest = this.rooms.get(roomCode);
+                  if (latest && !latest.hostConnected) {
+                    this.closeRoom(roomCode, { initiatedBy: 'host-disconnect-timeout' });
+                  }
+                }, this.HOST_DISCONNECT_TIMEOUT_MS);
+                this.hostDisconnectTimers.set(roomCode, t);
+              } catch (_) {}
+            }
         } else {
             const player = room.players.find(p => p.socketId === socket.id);
             if (player) {
@@ -1003,29 +1083,43 @@ export class GameManager {
   }
 
   private createNewLobby(room: Room, socket: Socket) {
-    // Clear timers before closing
+    // Clear all timers before closing
     this.clearAQTimer(room.code);
     this.clearSCTimer(room.code);
+    this.clearSSSTimer(room.code);
     this.clearCCTimer(room.code);
-    
-    // Notify all players that the lobby is being closed
-    this.io.to(room.code).emit('lobby_closed');
-    
-    // Remove all players from the room
+
+    // Notify players that the lobby is closed
+    this.io.to(room.code).emit('lobby_closed', { roomCode: room.code });
+
+    // Make sure any mapped sockets leave and remove mappings
     for (const player of room.players) {
       if (player.socketId) {
+        const s = this.io.sockets.sockets.get(player.socketId);
+        if (s) {
+          try { s.leave(room.code); } catch (_) {}
+          try { s.emit('lobby_closed', { roomCode: room.code }); } catch (_) {}
+        }
         this.socketRoomMap.delete(player.socketId);
       }
     }
-    
-    // Delete the old room
-    this.rooms.delete(room.code);
-    
-    // Create a new room with a new code
-    const newCode = this.generateRoomCode();
+
+    // Also clean any stray mappings that reference the old code
+    for (const [socketId, code] of Array.from(this.socketRoomMap.entries())) {
+      if (code === room.code) this.socketRoomMap.delete(socketId);
+    }
+
+    const oldCode = room.code;
+    const preservedGameId = room.gameId ?? 'nasty-libs';
+
+    // Delete old room
+    this.rooms.delete(oldCode);
+
+    // Create a new room with a new unique code and preserved gameId
+    const newCode = this.generateUniqueRoomCode();
     const newRoom: Room = {
       code: newCode,
-      gameId: 'nasty-libs',
+      gameId: preservedGameId,
       hostSocketId: room.hostSocketId,
       hostKey: room.hostKey,
       hostConnected: room.hostConnected,
@@ -1038,18 +1132,27 @@ export class GameManager {
       votedBy: {},
       createdAt: Date.now(),
     };
-    
+
     this.rooms.set(newCode, newRoom);
-    
-    // Notify the host of the new room
+
+    // Move host socket into new room and notify host
     if (room.hostSocketId) {
       const hostSocket = this.io.sockets.sockets.get(room.hostSocketId);
       if (hostSocket) {
-        hostSocket.leave(room.code);
-        hostSocket.join(newCode);
-        hostSocket.emit('new_lobby_created', { code: newCode });
+        try { hostSocket.leave(oldCode); } catch (_) {}
+        try { hostSocket.join(newCode); } catch (_) {}
+        this.socketRoomMap.set(hostSocket.id, newCode);
+        hostSocket.emit('new_lobby_created', { oldCode, newCode, gameId: preservedGameId });
       }
     }
+
+    // Prevent immediate reuse of the old code
+    try {
+      const existing = this.recentlyClosed.get(oldCode);
+      if (existing) clearTimeout(existing);
+      const t = setTimeout(() => this.recentlyClosed.delete(oldCode), this.ROOM_REUSE_DELAY_MS);
+      this.recentlyClosed.set(oldCode, t);
+    } catch (_) {}
   }
 
   private startGame(room: Room) {
@@ -1634,10 +1737,16 @@ export class GameManager {
   }
 
   private generateUniqueRoomCode(): string {
-    for (let attempt = 0; attempt < 20; attempt++) {
+    for (let attempt = 0; attempt < 50; attempt++) {
       const code = this.generateRoomCode();
-      if (!this.rooms.has(code)) return code;
+      if (!this.rooms.has(code) && !this.recentlyClosed.has(code)) return code;
     }
+    // Fallback: use UUID-derived code (still check recentlyClosed)
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const code = uuidv4().slice(0, 4).toUpperCase();
+      if (!this.rooms.has(code) && !this.recentlyClosed.has(code)) return code;
+    }
+    // Last resort, return any non-existing or just random
     return uuidv4().slice(0, 4).toUpperCase();
   }
 
