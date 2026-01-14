@@ -1520,13 +1520,62 @@ export default function PlayerScreen() {
               </div>
             </div>
             
-            <WoodenButton type="button" variant="wood" onClick={() => {
-              setJoined(false);
-              setRoom(null);
-              setCcHand([]);
-            }} className="w-full">
-              BACK TO LOBBY
-            </WoodenButton>
+            {isController ? (
+              <div className="flex flex-col gap-4">
+                <WoodenButton 
+                  type="button" 
+                  variant="wood" 
+                  onClick={() => {
+                    socket.emit('game_action', { action: 'PLAY_AGAIN' });
+                  }} 
+                  className="px-6 py-3 w-full"
+                >
+                  PLAY AGAIN
+                </WoodenButton>
+                <WoodenButton 
+                  type="button" 
+                  variant="red" 
+                  onClick={() => {
+                    socket.emit('game_action', { action: 'NEW_LOBBY' });
+                    setJoined(false);
+                    setRoom(null);
+                    setCcHand([]);
+                    if (roomCode) {
+                      try {
+                        localStorage.removeItem(`playerId:${roomCode.toUpperCase()}`);
+                      } catch {
+                        // ignore
+                      }
+                    }
+                  }} 
+                  className="px-6 py-3 w-full"
+                >
+                  NEW LOBBY
+                </WoodenButton>
+                <p className="text-sm text-slate-400 mt-2">
+                  "Play Again" returns to lobby with same players.<br/>
+                  "New Lobby" creates a fresh room.
+                </p>
+              </div>
+            ) : (
+              <div className="text-center">
+                <p className="text-slate-400 mb-4">Waiting for controller to decide...</p>
+                <WoodenButton type="button" variant="wood" onClick={() => {
+                  setJoined(false);
+                  setRoom(null);
+                  setCcHand([]);
+                  if (roomCode) {
+                    try {
+                      localStorage.removeItem(`playerId:${roomCode.toUpperCase()}`);
+                    } catch {
+                      // ignore
+                    }
+                  }
+                }} className="px-6 py-3">
+                  LEAVE
+                </WoodenButton>
+              </div>
+            )}
           </div>
         )}
 
