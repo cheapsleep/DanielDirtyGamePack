@@ -72,7 +72,7 @@ function App() {
   if (isJoin) {
     return (
       <div className="min-h-screen bg-slate-900 overflow-hidden">
-        <PlayerScreen onBack={() => (window.location.hash = '#/join')} />
+        <PlayerScreen />
       </div>
     );
   }
@@ -99,7 +99,7 @@ function App() {
       )}
 
       {view === 'PLAYER' && (
-        <PlayerScreen onBack={handleBackToLibrary} />
+        <PlayerScreen />
       )}
     </div>
   );
