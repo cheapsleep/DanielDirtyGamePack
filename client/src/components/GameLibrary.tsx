@@ -41,6 +41,14 @@ export default function GameLibrary({ onSelectGame }: GameLibraryProps) {
       minPlayers: 3,
     },
     {
+      id: 'scribble-scrabble-scrambled',
+      title: 'SCRIBBLE SCRABBLE: SCRAMBLED',
+      description: 'One player gets a real prompt, everyone else gets scrambled variants. Draw, then vote to find the imposter! Trick others to win.',
+      color: 'bg-amber-600',
+      logo: '/assets/SSS_Logo.svg',
+      minPlayers: 3,
+    },
+    {
       id: 'card-calamity',
       title: 'CARD CALAMITY',
       description: 'A chaotic card-matching showdown! Match colors or numbers, stack penalties, and be first to empty your hand. Wild cards welcome!',

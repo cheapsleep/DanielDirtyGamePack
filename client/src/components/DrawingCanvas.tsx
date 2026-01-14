@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
+import { useRef, useEffect, useState, useCallback, useMemo, forwardRef, useImperativeHandle } from 'react';
 
 interface Point {
   x: number;
@@ -9,6 +9,11 @@ interface Stroke {
   points: Point[];
   color: string;
   width: number;
+}
+
+export interface DrawingCanvasHandle {
+  getDataURL: () => string;
+  clearCanvas: () => void;
 }
 
 interface DrawingCanvasProps {
@@ -42,7 +47,7 @@ const COLORS = [
 
 const BRUSH_SIZES = [4, 8, 16];
 
-export default function DrawingCanvas({
+const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(function DrawingCanvas({
   mode,
   onStroke,
   onClear,
@@ -51,7 +56,7 @@ export default function DrawingCanvas({
   width = 800,
   height = 600,
   className = '',
-}: DrawingCanvasProps) {
+}, ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentColor, setCurrentColor] = useState('#000000');
@@ -59,6 +64,24 @@ export default function DrawingCanvas({
   const [currentStroke, setCurrentStroke] = useState<Point[]>([]);
   const [localStrokes, setLocalStrokes] = useState<Stroke[]>([]);
   const [isEraser, setIsEraser] = useState(false);
+
+  // Expose methods to parent via ref
+  useImperativeHandle(ref, () => ({
+    getDataURL: () => {
+      const canvas = canvasRef.current;
+      if (!canvas) return '';
+      return canvas.toDataURL('image/png');
+    },
+    clearCanvas: () => {
+      setLocalStrokes([]);
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+  }), []);
   
   // Redraw all strokes on canvas
   const redrawCanvas = useCallback(() => {
@@ -308,7 +331,9 @@ export default function DrawingCanvas({
       )}
     </div>
   );
-}
+});
+
+export default DrawingCanvas;
 
 // Export a hook for receiving real-time stroke updates
 export function useStrokeReceiver() {

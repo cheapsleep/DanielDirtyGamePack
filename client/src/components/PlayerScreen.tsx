@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { socket, socketServerUrl } from '../socket';
 
 import WoodenButton from './WoodenButton';
-import ScribbleCanvas from './DrawingCanvas';
+import ScribbleCanvas, { DrawingCanvasHandle } from './DrawingCanvas';
 import CardCalamityCard, { ColorPicker, ActiveColorIndicator, CCCard } from './CardCalamityCard';
 
 // Simple drawing canvas (for Dubiously Patented)
@@ -160,6 +160,20 @@ interface RoomPublicState {
   ccWinnerId?: string;
   ccWinnerName?: string;
   ccPendingWildPlayerId?: string;
+  // Scribble Scrabble: Scrambled fields
+  sssRound?: number;
+  sssDrawTime?: number;
+  sssDoubleRounds?: boolean;
+  sssDrawingsSubmitted?: number;
+  sssVotesSubmitted?: number;
+  sssActivePlayerCount?: number;
+  sssScores?: Record<string, number>;
+  sssDrawings?: Record<string, string>;
+  sssRealDrawerId?: string;
+  sssRealPrompt?: string;
+  sssAllPrompts?: Record<string, string>;
+  sssVotes?: Record<string, string>;
+  sssRoundScores?: Record<string, { tricked: number; correct: boolean }>;
 }
 
 export default function PlayerScreen() {
@@ -199,6 +213,24 @@ export default function PlayerScreen() {
   const [ccIsDealing, setCcIsDealing] = useState(false);
   const [ccTimeLeft, setCcTimeLeft] = useState(30);
   const [ccSelectedCardId, setCcSelectedCardId] = useState<string | null>(null);
+  // Scribble Scrabble: Scrambled state
+  const [sssPrompt, setSssPrompt] = useState<string>('');
+  const [sssIsRealPrompt, setSssIsRealPrompt] = useState<boolean>(false);
+  const [sssTimeLeft, setSssTimeLeft] = useState<number>(60);
+  const [sssDrawingSubmitted, setSssDrawingSubmitted] = useState<boolean>(false);
+  const [sssSelectedVote, setSssSelectedVote] = useState<string | null>(null);
+  const [sssVoteSubmitted, setSssVoteSubmitted] = useState<boolean>(false);
+  const [sssResults, setSssResults] = useState<{
+    realDrawerId: string;
+    realPrompt: string;
+    allPrompts: Record<string, string>;
+    drawings: Record<string, string>;
+    votes: Record<string, string>;
+    roundScores: Record<string, { tricked: number; correct: boolean }>;
+    totalScores: Record<string, number>;
+    votesByTarget: Record<string, string[]>;
+  } | null>(null);
+  const sssCanvasRef = useRef<DrawingCanvasHandle>(null);
 
   useEffect(() => {
     // Check pathname first: /join/ABCD
@@ -372,6 +404,37 @@ export default function PlayerScreen() {
       // Game ended, handled by room state change
     });
 
+    // Scribble Scrabble: Scrambled events
+    socket.on('sss_prompt', (data: { prompt: string; isReal: boolean }) => {
+      setSssPrompt(data.prompt);
+      setSssIsRealPrompt(data.isReal);
+      setSssDrawingSubmitted(false);
+      setSssVoteSubmitted(false);
+      setSssSelectedVote(null);
+      setSssResults(null);
+    });
+
+    socket.on('sss_timer', (data: { timeLeft: number }) => {
+      setSssTimeLeft(data.timeLeft);
+    });
+
+    socket.on('sss_results', (data: {
+      realDrawerId: string;
+      realPrompt: string;
+      allPrompts: Record<string, string>;
+      drawings: Record<string, string>;
+      votes: Record<string, string>;
+      roundScores: Record<string, { tricked: number; correct: boolean }>;
+      totalScores: Record<string, number>;
+      votesByTarget: Record<string, string[]>;
+    }) => {
+      setSssResults(data);
+    });
+
+    socket.on('sss_game_end', () => {
+      // Game ended, handled by room state change
+    });
+
     socket.on('error', (data) => {
         if (data?.code === 'GAME_ERROR') {
           setSubmitted(false);
@@ -441,6 +504,10 @@ export default function PlayerScreen() {
       socket.off('cc_timer');
       socket.off('cc_invalid_play');
       socket.off('cc_game_end');
+      socket.off('sss_prompt');
+      socket.off('sss_timer');
+      socket.off('sss_results');
+      socket.off('sss_game_end');
       socket.off('error');
       socket.off('connect_error');
       socket.off('room_closed');
@@ -726,8 +793,53 @@ export default function PlayerScreen() {
                       </div>
                     )}
 
-                    {/* Bot controls - not for Scribble Scrabble or Card Calamity */}
-                    {gameId !== 'scribble-scrabble' && gameId !== 'card-calamity' && (
+                    {/* Scribble Scrabble: Scrambled settings */}
+                    {gameId === 'scribble-scrabble-scrambled' && (
+                      <div className="mb-6 p-4 bg-slate-800 rounded-lg">
+                        <h3 className="text-lg font-bold text-purple-400 mb-3">Game Settings</h3>
+                        <div className="flex flex-col gap-4">
+                          <div>
+                            <label className="text-sm text-slate-400 block mb-1">Draw Time:</label>
+                            <div className="flex gap-2 justify-center">
+                              {[60, 90].map(sec => (
+                                <button
+                                  key={sec}
+                                  onClick={() => socket.emit('game_action', { action: 'SSS_SET_DRAW_TIME', time: sec })}
+                                  className={`px-4 py-2 rounded font-bold flex-1 ${
+                                    (room?.sssDrawTime ?? 60) === sec 
+                                      ? 'bg-purple-500 text-black' 
+                                      : 'bg-slate-700 text-white'
+                                  }`}
+                                >
+                                  {sec}s
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          <div>
+                            <label className="text-sm text-slate-400 block mb-1">Double Rounds:</label>
+                            <button
+                              onClick={() => socket.emit('game_action', { action: 'SSS_SET_DOUBLE_ROUNDS', enabled: !room?.sssDoubleRounds })}
+                              className={`px-4 py-2 rounded font-bold w-full ${
+                                room?.sssDoubleRounds 
+                                  ? 'bg-purple-500 text-black' 
+                                  : 'bg-slate-700 text-white'
+                              }`}
+                            >
+                              {room?.sssDoubleRounds ? '✓ ON (2× Rounds)' : '✗ OFF (Normal)'}
+                            </button>
+                            <p className="text-xs text-slate-500 mt-1">
+                              {room?.sssDoubleRounds 
+                                ? 'Each player gets the real prompt twice' 
+                                : 'Each player gets the real prompt once'}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Bot controls - not for Scribble Scrabble, Card Calamity, or SSS */}
+                    {gameId !== 'scribble-scrabble' && gameId !== 'card-calamity' && gameId !== 'scribble-scrabble-scrambled' && (
                       <div className="flex gap-3 justify-center mb-4">
                         <WoodenButton type="button" variant="wood" onClick={handleAddBot} className="px-6">
                           ADD CPU
@@ -1632,6 +1744,251 @@ export default function PlayerScreen() {
                   LEAVE
                 </WoodenButton>
               </div>
+            )}
+          </div>
+        )}
+
+        {/* Scribble Scrabble: Scrambled - Drawing */}
+        {gameState === 'SSS_DRAWING' && (
+          <div className="w-full max-w-lg mx-auto">
+            <div className="text-center mb-4">
+              <div className="text-4xl font-bold text-purple-400 mb-1">
+                {sssTimeLeft}<span className="text-xl">s</span>
+              </div>
+              <p className="text-slate-400 text-sm">Round {room?.sssRound}/{room?.totalRounds}</p>
+            </div>
+            
+            {sssIsRealPrompt && (
+              <motion.div
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                className="bg-gradient-to-r from-yellow-600 to-orange-600 rounded-lg p-3 mb-4 text-center"
+              >
+                <p className="text-lg font-bold text-white">🎯 YOU HAVE THE REAL PROMPT!</p>
+              </motion.div>
+            )}
+            
+            <div className="bg-slate-800 rounded-lg p-4 mb-4 text-center">
+              <p className="text-slate-400 text-sm mb-1">Your prompt:</p>
+              <p className="text-2xl font-bold text-white">{sssPrompt}</p>
+            </div>
+            
+            {sssDrawingSubmitted ? (
+              <div className="text-center py-8">
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  className="text-green-400 text-2xl font-bold mb-2"
+                >
+                  ✓ Drawing Submitted!
+                </motion.div>
+                <p className="text-slate-400">
+                  Waiting for others... ({room?.sssDrawingsSubmitted}/{room?.sssActivePlayerCount})
+                </p>
+              </div>
+            ) : (
+              <>
+                <ScribbleCanvas
+                  ref={sssCanvasRef}
+                  mode="draw"
+                  width={400}
+                  height={300}
+                  onStroke={() => {}}
+                  onClear={() => {}}
+                  className="mx-auto mb-4"
+                />
+                <WoodenButton
+                  type="button"
+                  variant="red"
+                  onClick={() => {
+                    if (sssCanvasRef.current) {
+                      const drawing = sssCanvasRef.current.getDataURL();
+                      socket.emit('game_action', { action: 'SSS_SUBMIT_DRAWING', drawing });
+                      setSssDrawingSubmitted(true);
+                    }
+                  }}
+                  className="w-full"
+                >
+                  SUBMIT DRAWING
+                </WoodenButton>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Scribble Scrabble: Scrambled - Voting */}
+        {gameState === 'SSS_VOTING' && (
+          <div className="w-full max-w-lg mx-auto">
+            <div className="text-center mb-4">
+              <h2 className="text-2xl font-bold text-purple-400 mb-2">🗳️ Vote!</h2>
+              <p className="text-slate-400">Which drawing had the REAL prompt?</p>
+              <p className="text-sm text-slate-500 mt-1">
+                Votes: {room?.sssVotesSubmitted}/{room?.sssActivePlayerCount}
+              </p>
+            </div>
+            
+            {sssVoteSubmitted ? (
+              <div className="text-center py-8">
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  className="text-green-400 text-2xl font-bold mb-2"
+                >
+                  ✓ Vote Submitted!
+                </motion.div>
+                <p className="text-slate-400">Waiting for others...</p>
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  {Object.entries(room?.sssDrawings ?? {})
+                    .filter(([pid]) => pid !== playerId)
+                    .map(([pid, drawing]) => {
+                      const player = room?.players?.find(p => p.id === pid);
+                      const isSelected = sssSelectedVote === pid;
+                      return (
+                        <motion.button
+                          key={pid}
+                          onClick={() => setSssSelectedVote(pid)}
+                          className={`relative rounded-lg overflow-hidden border-4 transition-all ${
+                            isSelected
+                              ? 'border-purple-500 scale-105'
+                              : 'border-transparent hover:border-slate-600'
+                          }`}
+                          whileTap={{ scale: 0.95 }}
+                        >
+                          {drawing ? (
+                            <img
+                              src={drawing}
+                              alt={`Drawing by ${player?.name}`}
+                              className="w-full aspect-[4/3] object-contain bg-white"
+                            />
+                          ) : (
+                            <div className="w-full aspect-[4/3] bg-slate-700 flex items-center justify-center">
+                              <span className="text-slate-500">No drawing</span>
+                            </div>
+                          )}
+                          {isSelected && (
+                            <div className="absolute top-2 right-2 bg-purple-500 text-white rounded-full w-6 h-6 flex items-center justify-center">
+                              ✓
+                            </div>
+                          )}
+                        </motion.button>
+                      );
+                    })}
+                </div>
+                
+                <WoodenButton
+                  type="button"
+                  variant="red"
+                  onClick={() => {
+                    if (sssSelectedVote) {
+                      socket.emit('game_action', { action: 'SSS_VOTE', votedForPlayerId: sssSelectedVote });
+                      setSssVoteSubmitted(true);
+                    }
+                  }}
+                  disabled={!sssSelectedVote}
+                  className={`w-full ${!sssSelectedVote ? 'opacity-50' : ''}`}
+                >
+                  CONFIRM VOTE
+                </WoodenButton>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Scribble Scrabble: Scrambled - Results */}
+        {gameState === 'SSS_RESULTS' && sssResults && (
+          <div className="w-full max-w-lg mx-auto">
+            <div className="text-center mb-4">
+              <h2 className="text-2xl font-bold text-purple-400 mb-2">📊 Round Results</h2>
+              <p className="text-slate-400">Round {room?.sssRound}/{room?.totalRounds}</p>
+            </div>
+            
+            {/* Personal score breakdown */}
+            <div className="bg-slate-800 rounded-lg p-4 mb-4">
+              <h3 className="font-bold text-white mb-2">Your Round:</h3>
+              <div className="space-y-1">
+                {sssResults.roundScores[playerId]?.tricked > 0 && (
+                  <motion.div
+                    initial={{ x: -20, opacity: 0 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    className="text-green-400"
+                  >
+                    Tricked {sssResults.roundScores[playerId].tricked} player(s): +{sssResults.roundScores[playerId].tricked}
+                  </motion.div>
+                )}
+                {sssResults.roundScores[playerId]?.correct && (
+                  <motion.div
+                    initial={{ x: -20, opacity: 0 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    transition={{ delay: 0.2 }}
+                    className="text-green-400"
+                  >
+                    Correct guess: +2
+                  </motion.div>
+                )}
+                {!sssResults.roundScores[playerId]?.tricked && !sssResults.roundScores[playerId]?.correct && (
+                  <div className="text-slate-400">No points this round</div>
+                )}
+              </div>
+            </div>
+            
+            {/* Real prompt reveal */}
+            <div className="bg-gradient-to-r from-yellow-600 to-orange-600 rounded-lg p-4 mb-4 text-center">
+              <p className="text-sm text-white/80 mb-1">The REAL prompt was:</p>
+              <p className="text-xl font-bold text-white">{sssResults.realPrompt}</p>
+              <p className="text-sm text-white/80 mt-1">
+                by {room?.players?.find(p => p.id === sssResults.realDrawerId)?.name}
+                {sssResults.realDrawerId === playerId && " (You!)"}
+              </p>
+            </div>
+            
+            {/* All prompts that were in play */}
+            <div className="bg-slate-800 rounded-lg p-4 mb-4">
+              <h3 className="font-bold text-white mb-2">All Prompts:</h3>
+              <div className="space-y-1 text-sm">
+                {Object.entries(sssResults.allPrompts).map(([pid, prompt]) => {
+                  const player = room?.players?.find(p => p.id === pid);
+                  const isReal = pid === sssResults.realDrawerId;
+                  return (
+                    <div key={pid} className={isReal ? 'text-yellow-400 font-semibold' : 'text-slate-300'}>
+                      {player?.name}: "{prompt}" {isReal && '(REAL)'}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            
+            {/* Current standings */}
+            <div className="bg-slate-800 rounded-lg p-4 mb-4">
+              <h3 className="font-bold text-white mb-2">Standings:</h3>
+              <div className="space-y-1">
+                {Object.entries(sssResults.totalScores)
+                  .sort(([,a], [,b]) => b - a)
+                  .map(([pid, score], i) => {
+                    const player = room?.players?.find(p => p.id === pid);
+                    return (
+                      <div key={pid} className={`flex justify-between ${pid === playerId ? 'text-yellow-400 font-bold' : 'text-slate-300'}`}>
+                        <span>#{i + 1} {player?.name}</span>
+                        <span>{score} pts</span>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+            
+            {isController && (
+              <WoodenButton
+                type="button"
+                variant="red"
+                onClick={() => {
+                  socket.emit('game_action', { action: 'NEXT_ROUND' });
+                }}
+                className="w-full"
+              >
+                {(room?.sssRound ?? 0) < (room?.totalRounds ?? 0) ? 'NEXT ROUND' : 'SEE FINAL RESULTS'}
+              </WoodenButton>
             )}
           </div>
         )}

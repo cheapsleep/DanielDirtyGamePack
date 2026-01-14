@@ -3,8 +3,9 @@ import { v4 as uuidv4 } from 'uuid';
 import { nastyPrompts, nastyAnswers } from './nastyPrompts';
 import { autismQuizQuestions, generateCertificateSVG, generateMostAutisticCertificateSVG } from './autismQuiz';
 import { generateWordOptions, isCloseGuess, isCorrectGuess, generateWordHint } from './scribbleWords';
+import { generatePromptSetFromTemplate, getUnusedTemplateIndex, TEMPLATE_COUNT } from './sssPrompts';
 
-type GameId = 'nasty-libs' | 'dubiously-patented' | 'autism-assessment' | 'scribble-scrabble' | 'card-calamity';
+type GameId = 'nasty-libs' | 'dubiously-patented' | 'autism-assessment' | 'scribble-scrabble' | 'card-calamity' | 'scribble-scrabble-scrambled';
 
 // Card Calamity types
 type CCColor = 'red' | 'blue' | 'green' | 'yellow';
@@ -56,6 +57,9 @@ interface Room {
     | 'CC_PLAYING'
     | 'CC_PICK_COLOR'
     | 'CC_RESULTS'
+    | 'SSS_DRAWING'
+    | 'SSS_VOTING'
+    | 'SSS_RESULTS'
     | 'END';
   currentRound: number;
   totalRounds: number;
@@ -103,6 +107,20 @@ interface Room {
   ccStackingEnabled?: boolean; // Option to allow stacking +2/+4
   ccLastAction?: { type: string; playerId: string; playerName: string; card?: CCCard; color?: CCColor };
   ccPendingWildPlayerId?: string; // Player who needs to pick a color
+  // Scribble Scrabble: Scrambled fields
+  sssRealPrompt?: string; // The real prompt for this round
+  sssAllPrompts?: Record<string, string>; // playerId -> their assigned prompt
+  sssDrawings?: Record<string, string>; // playerId -> base64 drawing data
+  sssVotes?: Record<string, string>; // voterId -> votedForPlayerId
+  sssRealDrawerId?: string; // Player who has the real prompt this round
+  sssRound?: number; // Current round number
+  sssScores?: Record<string, number>; // playerId -> total score
+  sssDrawTime?: 60 | 90; // Drawing time in seconds
+  sssDoubleRounds?: boolean; // If true, play 2x rounds (each player is real drawer twice)
+  sssRealDrawerOrder?: string[]; // Shuffled player IDs for fair rotation
+  sssActivePlayerIds?: string[]; // Players active at round start (for late-join handling)
+  sssUsedTemplateIndices?: number[]; // Template indices used to avoid repeats
+  sssRoundScores?: Record<string, { tricked: number; correct: boolean }>; // Per-round breakdown
   answers: { playerId: string; answer: string }[];
   votes: Record<string, number>; // answerIndex -> count
   votedBy?: Record<string, boolean>;
@@ -115,6 +133,7 @@ export class GameManager {
   private botRun: Map<string, { running: boolean; pending: boolean }> = new Map();
   private aqTimers: Map<string, NodeJS.Timeout> = new Map(); // roomCode -> timer
   private scTimers: Map<string, NodeJS.Timeout> = new Map(); // roomCode -> timer (Scribble Scrabble)
+  private sssTimers: Map<string, NodeJS.Timeout> = new Map(); // roomCode -> timer (Scribble Scrabble: Scrambled)
   private ccTimers: Map<string, NodeJS.Timeout> = new Map(); // roomCode -> timer (Card Calamity)
 
   constructor(io: Server) {
@@ -490,6 +509,25 @@ export class GameManager {
       case 'CC_PICK_COLOR':
         this.handleCCPickColor(room, socket.id, data.color);
         break;
+      // Scribble Scrabble: Scrambled actions
+      case 'SSS_SET_DRAW_TIME':
+        if (this.isControllerSocket(room, socket.id) && room.state === 'LOBBY') {
+          room.sssDrawTime = data.time === 90 ? 90 : 60;
+          this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+        }
+        break;
+      case 'SSS_SET_DOUBLE_ROUNDS':
+        if (this.isControllerSocket(room, socket.id) && room.state === 'LOBBY') {
+          room.sssDoubleRounds = !!data.enabled;
+          this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+        }
+        break;
+      case 'SSS_SUBMIT_DRAWING':
+        this.handleSSSSubmitDrawing(room, socket.id, data.drawing);
+        break;
+      case 'SSS_VOTE':
+        this.handleSSSVote(room, socket.id, data.votedForPlayerId);
+        break;
       case 'NEXT_ROUND':
         if (this.isControllerSocket(room, socket.id)) {
             this.nextRound(room);
@@ -554,6 +592,14 @@ export class GameManager {
       const controller = room.players.find(p => p.id === room.controllerPlayerId);
       if (controller) {
         this.io.to(controller.socketId).emit('error_message', { message: 'Scribble Scrabble does not support bots — humans only!' });
+      }
+      return;
+    }
+    // Scribble Scrabble: Scrambled doesn't support bots
+    if (room.gameId === 'scribble-scrabble-scrambled') {
+      const controller = room.players.find(p => p.id === room.controllerPlayerId);
+      if (controller) {
+        this.io.to(controller.socketId).emit('error_message', { message: 'Scribble Scrabble: Scrambled does not support bots — humans only!' });
       }
       return;
     }
@@ -1057,6 +1103,11 @@ export class GameManager {
       return;
     }
 
+    if (room.gameId === 'scribble-scrabble-scrambled') {
+      this.startScribbleScrabbleScrambled(room);
+      return;
+    }
+
     // Initialize money for Dubiously Patented
     room.players.forEach(p => { p.score = 1000; });
 
@@ -1550,6 +1601,12 @@ export class GameManager {
     if (room.gameId === 'scribble-scrabble') {
       if (room.state !== 'SC_ROUND_RESULTS') return;
       this.advanceSCRound(room);
+      return;
+    }
+
+    if (room.gameId === 'scribble-scrabble-scrambled') {
+      if (room.state !== 'SSS_RESULTS') return;
+      this.advanceSSSRound(room);
       return;
     }
 
@@ -2367,6 +2424,316 @@ export class GameManager {
 
   // ==================== END CARD CALAMITY METHODS ====================
 
+  // ==================== SCRIBBLE SCRABBLE: SCRAMBLED METHODS ====================
+
+  private startScribbleScrabbleScrambled(room: Room) {
+    const activePlayers = this.getActivePlayers(room);
+    
+    // Minimum 3 players required
+    if (activePlayers.length < 3) {
+      const controller = room.players.find(p => p.id === room.controllerPlayerId);
+      if (controller) {
+        this.io.to(controller.socketId).emit('error_message', { 
+          message: 'Scribble Scrabble: Scrambled requires at least 3 players!' 
+        });
+      }
+      return;
+    }
+    
+    // Initialize game state
+    room.sssScores = {};
+    for (const p of activePlayers) {
+      room.sssScores[p.id] = 0;
+    }
+    
+    // Shuffle player order for fair rotation of who gets real prompt
+    room.sssRealDrawerOrder = [...activePlayers.map(p => p.id)].sort(() => Math.random() - 0.5);
+    
+    // If double rounds, duplicate the order
+    if (room.sssDoubleRounds) {
+      room.sssRealDrawerOrder = [...room.sssRealDrawerOrder, ...room.sssRealDrawerOrder.sort(() => Math.random() - 0.5)];
+    }
+    
+    room.totalRounds = room.sssRealDrawerOrder.length;
+    room.sssRound = 0;
+    room.sssUsedTemplateIndices = [];
+    room.sssDrawTime = room.sssDrawTime ?? 60;
+    
+    this.io.to(room.code).emit('game_started');
+    
+    // Start first round
+    this.startSSSRound(room);
+  }
+
+  private startSSSRound(room: Room) {
+    const activePlayers = this.getActivePlayers(room);
+    
+    room.sssRound = (room.sssRound ?? 0) + 1;
+    room.currentRound = room.sssRound;
+    
+    // Get the real drawer for this round
+    const realDrawerIndex = (room.sssRound - 1) % room.sssRealDrawerOrder!.length;
+    room.sssRealDrawerId = room.sssRealDrawerOrder![realDrawerIndex];
+    
+    // Track active players for this round (late-joiners spectate)
+    room.sssActivePlayerIds = activePlayers.map(p => p.id);
+    
+    // Generate prompts, avoiding used templates
+    const usedIndices = new Set(room.sssUsedTemplateIndices ?? []);
+    const templateIndex = getUnusedTemplateIndex(usedIndices);
+    room.sssUsedTemplateIndices = [...(room.sssUsedTemplateIndices ?? []), templateIndex];
+    
+    const promptSet = generatePromptSetFromTemplate(templateIndex, activePlayers.length);
+    room.sssRealPrompt = promptSet.realPrompt;
+    
+    // Assign prompts to players
+    room.sssAllPrompts = {};
+    const shuffledVariants = [...promptSet.variants].sort(() => Math.random() - 0.5);
+    let variantIndex = 0;
+    
+    for (const player of activePlayers) {
+      if (player.id === room.sssRealDrawerId) {
+        room.sssAllPrompts[player.id] = promptSet.realPrompt;
+      } else {
+        room.sssAllPrompts[player.id] = shuffledVariants[variantIndex];
+        variantIndex++;
+      }
+    }
+    
+    // Clear drawings and votes
+    room.sssDrawings = {};
+    room.sssVotes = {};
+    room.sssRoundScores = {};
+    
+    room.state = 'SSS_DRAWING';
+    this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+    
+    // Send private prompts to each player
+    for (const player of activePlayers) {
+      const prompt = room.sssAllPrompts[player.id];
+      const isReal = player.id === room.sssRealDrawerId;
+      this.io.to(player.socketId).emit('sss_prompt', { prompt, isReal });
+    }
+    
+    // Start drawing timer
+    this.startSSSTimer(room);
+  }
+
+  private startSSSTimer(room: Room) {
+    this.clearSSSTimer(room.code);
+    
+    const duration = (room.sssDrawTime ?? 60) * 1000;
+    const startTime = Date.now();
+    
+    // Emit timer start
+    this.io.to(room.code).emit('sss_timer', { timeLeft: room.sssDrawTime ?? 60 });
+    
+    // Countdown every second
+    const countdownInterval = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const remaining = Math.max(0, Math.ceil((duration - elapsed) / 1000));
+      this.io.to(room.code).emit('sss_timer', { timeLeft: remaining });
+    }, 1000);
+    
+    // Main timer
+    const timer = setTimeout(() => {
+      clearInterval(countdownInterval);
+      this.handleSSSDrawingTimeout(room.code);
+    }, duration);
+    
+    this.sssTimers.set(room.code, timer);
+    this.sssTimers.set(`${room.code}_interval`, countdownInterval);
+  }
+
+  private clearSSSTimer(roomCode: string) {
+    const timer = this.sssTimers.get(roomCode);
+    if (timer) {
+      clearTimeout(timer);
+      this.sssTimers.delete(roomCode);
+    }
+    const interval = this.sssTimers.get(`${roomCode}_interval`);
+    if (interval) {
+      clearInterval(interval);
+      this.sssTimers.delete(`${roomCode}_interval`);
+    }
+  }
+
+  private handleSSSDrawingTimeout(roomCode: string) {
+    const room = this.rooms.get(roomCode);
+    if (!room || room.state !== 'SSS_DRAWING') return;
+    
+    // Auto-submit empty drawings for players who didn't submit
+    const activePlayers = room.sssActivePlayerIds ?? [];
+    for (const playerId of activePlayers) {
+      if (!room.sssDrawings?.[playerId]) {
+        room.sssDrawings = room.sssDrawings ?? {};
+        room.sssDrawings[playerId] = ''; // Empty drawing
+      }
+    }
+    
+    // Move to voting
+    this.advanceToSSSVoting(room);
+  }
+
+  private handleSSSSubmitDrawing(room: Room, socketId: string, drawing: string) {
+    if (room.gameId !== 'scribble-scrabble-scrambled') return;
+    if (room.state !== 'SSS_DRAWING') return;
+    
+    const player = room.players.find(p => p.socketId === socketId);
+    if (!player) return;
+    
+    // Only active players can submit
+    if (!room.sssActivePlayerIds?.includes(player.id)) return;
+    
+    // Already submitted
+    if (room.sssDrawings?.[player.id]) return;
+    
+    room.sssDrawings = room.sssDrawings ?? {};
+    room.sssDrawings[player.id] = drawing;
+    
+    this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+    
+    // Check if all players have submitted
+    const activeCount = room.sssActivePlayerIds?.length ?? 0;
+    const submittedCount = Object.keys(room.sssDrawings).length;
+    
+    if (submittedCount >= activeCount) {
+      this.clearSSSTimer(room.code);
+      this.advanceToSSSVoting(room);
+    }
+  }
+
+  private advanceToSSSVoting(room: Room) {
+    room.state = 'SSS_VOTING';
+    room.sssVotes = {};
+    
+    this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+  }
+
+  private handleSSSVote(room: Room, socketId: string, votedForPlayerId: string) {
+    if (room.gameId !== 'scribble-scrabble-scrambled') return;
+    if (room.state !== 'SSS_VOTING') return;
+    
+    const player = room.players.find(p => p.socketId === socketId);
+    if (!player) return;
+    
+    // Only active players can vote
+    if (!room.sssActivePlayerIds?.includes(player.id)) return;
+    
+    // Can't vote for yourself
+    if (votedForPlayerId === player.id) return;
+    
+    // Can't vote for someone not playing
+    if (!room.sssActivePlayerIds?.includes(votedForPlayerId)) return;
+    
+    // Already voted
+    if (room.sssVotes?.[player.id]) return;
+    
+    room.sssVotes = room.sssVotes ?? {};
+    room.sssVotes[player.id] = votedForPlayerId;
+    
+    this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+    
+    // Check if all players have voted (everyone except the real drawer can vote)
+    const voterCount = (room.sssActivePlayerIds?.length ?? 0);
+    const votedCount = Object.keys(room.sssVotes).length;
+    
+    // Everyone votes (including real drawer to throw others off)
+    if (votedCount >= voterCount) {
+      this.calculateSSSScores(room);
+    }
+  }
+
+  private calculateSSSScores(room: Room) {
+    const realDrawerId = room.sssRealDrawerId!;
+    const votes = room.sssVotes ?? {};
+    
+    // Calculate how many people voted for each player
+    const votesByTarget: Record<string, string[]> = {};
+    for (const [voterId, targetId] of Object.entries(votes)) {
+      if (!votesByTarget[targetId]) {
+        votesByTarget[targetId] = [];
+      }
+      votesByTarget[targetId].push(voterId);
+    }
+    
+    // Count how many people the real drawer tricked (voted for them = wrong)
+    // Actually, people who voted for the REAL drawer guessed correctly
+    // People who voted for someone ELSE got tricked by that person
+    
+    room.sssRoundScores = {};
+    room.sssScores = room.sssScores ?? {};
+    
+    for (const playerId of room.sssActivePlayerIds ?? []) {
+      room.sssRoundScores[playerId] = { tricked: 0, correct: false };
+    }
+    
+    // Award points
+    for (const [voterId, targetId] of Object.entries(votes)) {
+      if (targetId === realDrawerId) {
+        // Correct guess! +2 points
+        room.sssScores[voterId] = (room.sssScores[voterId] ?? 0) + 2;
+        room.sssRoundScores[voterId].correct = true;
+      } else {
+        // Wrong guess - the person they voted for tricked them (+1 for that person)
+        room.sssScores[targetId] = (room.sssScores[targetId] ?? 0) + 1;
+        room.sssRoundScores[targetId].tricked += 1;
+      }
+    }
+    
+    // Update player scores in the player list
+    for (const player of room.players) {
+      player.score = room.sssScores[player.id] ?? 0;
+    }
+    
+    room.state = 'SSS_RESULTS';
+    this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+    
+    // Send detailed results
+    this.io.to(room.code).emit('sss_results', {
+      realDrawerId,
+      realPrompt: room.sssRealPrompt,
+      allPrompts: room.sssAllPrompts,
+      drawings: room.sssDrawings,
+      votes: room.sssVotes,
+      roundScores: room.sssRoundScores,
+      totalScores: room.sssScores,
+      votesByTarget
+    });
+  }
+
+  private advanceSSSRound(room: Room) {
+    const currentRound = room.sssRound ?? 0;
+    const totalRounds = room.totalRounds;
+    
+    if (currentRound >= totalRounds) {
+      // Game over
+      this.endScribbleScrabbleScrambled(room);
+    } else {
+      // Next round
+      this.startSSSRound(room);
+    }
+  }
+
+  private endScribbleScrabbleScrambled(room: Room) {
+    room.state = 'END';
+    
+    // Find winner(s)
+    const scores = room.sssScores ?? {};
+    const maxScore = Math.max(...Object.values(scores));
+    const winners = room.players.filter(p => scores[p.id] === maxScore);
+    
+    this.io.to(room.code).emit('sss_game_end', {
+      scores,
+      winnerId: winners[0]?.id,
+      winnerName: winners[0]?.name,
+      winners: winners.map(w => ({ id: w.id, name: w.name, score: scores[w.id] }))
+    });
+    this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+  }
+
+  // ==================== END SCRIBBLE SCRABBLE: SCRAMBLED METHODS ====================
+
   private getRoomPublicState(room: Room) {
     // Count how many players have answered the current AQ question
     const aqAnsweredCount = room.aqCurrentQuestion && room.aqAnswers
@@ -2431,7 +2798,21 @@ export class GameManager {
       ccLastAction: room.ccLastAction,
       ccWinnerId: room.ccWinnerId,
       ccWinnerName: room.ccWinnerId ? room.players.find(p => p.id === room.ccWinnerId)?.name : undefined,
-      ccPendingWildPlayerId: room.ccPendingWildPlayerId
+      ccPendingWildPlayerId: room.ccPendingWildPlayerId,
+      // Scribble Scrabble: Scrambled fields
+      sssRound: room.sssRound,
+      sssDrawTime: room.sssDrawTime ?? 60,
+      sssDoubleRounds: room.sssDoubleRounds ?? false,
+      sssDrawingsSubmitted: room.sssDrawings ? Object.keys(room.sssDrawings).length : 0,
+      sssVotesSubmitted: room.sssVotes ? Object.keys(room.sssVotes).length : 0,
+      sssActivePlayerCount: room.sssActivePlayerIds?.length ?? 0,
+      sssScores: room.sssScores,
+      sssDrawings: room.sssDrawings, // Send drawings for voting/results
+      sssRealDrawerId: room.state === 'SSS_RESULTS' ? room.sssRealDrawerId : undefined, // Only reveal after voting
+      sssRealPrompt: room.state === 'SSS_RESULTS' ? room.sssRealPrompt : undefined,
+      sssAllPrompts: room.state === 'SSS_RESULTS' ? room.sssAllPrompts : undefined,
+      sssVotes: room.state === 'SSS_RESULTS' ? room.sssVotes : undefined,
+      sssRoundScores: room.sssRoundScores
     };
   }
 
