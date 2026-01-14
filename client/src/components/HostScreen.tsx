@@ -453,13 +453,6 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
 
   return (
     <div className="w-full h-screen flex flex-col p-8">
-      {/* Centered game logo at top */}
-      {gameLogo && (
-        <div className="flex justify-center mb-4">
-          <img src={gameLogo} alt={title} className="h-40 object-contain" />
-        </div>
-      )}
-      
       <div className="flex justify-between items-center mb-8 border-b border-slate-700 pb-4">
         <div>
           <h2 className="text-xl text-slate-400">JOIN AT</h2>
@@ -471,10 +464,15 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
             <div className="text-sm text-slate-500 uppercase tracking-widest break-words">{title}</div>
           </div>
         </div>
-        <div className="text-center">
-            <h2 className="text-xl text-slate-400">ROOM CODE</h2>
-            <h1 className="text-6xl font-black text-pink-500 tracking-widest">{room.code}</h1>
-            <div className="text-sm text-slate-500 mt-2 uppercase tracking-widest">Controller: {controllerName}</div>
+        <div className="flex items-center gap-8">
+            {gameLogo && (
+              <img src={gameLogo} alt={title} className="h-48 object-contain" />
+            )}
+            <div className="text-center">
+              <h2 className="text-xl text-slate-400">ROOM CODE</h2>
+              <h1 className="text-6xl font-black text-pink-500 tracking-widest">{room.code}</h1>
+              <div className="text-sm text-slate-500 mt-2 uppercase tracking-widest">Controller: {controllerName}</div>
+            </div>
         </div>
         <WoodenButton variant="wood" onClick={handleBack} className="px-6 py-2 text-lg">
           {room.state === 'LOBBY' ? 'BACK' : 'QUIT GAME'}
