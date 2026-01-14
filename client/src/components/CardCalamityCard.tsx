@@ -1,9 +1,9 @@
 import { motion } from 'framer-motion';
 
-type CCColor = 'red' | 'blue' | 'green' | 'yellow';
-type CCCardType = 'number' | 'skip' | 'reverse' | 'draw2' | 'wild' | 'wild4';
+export type CCColor = 'red' | 'blue' | 'green' | 'yellow';
+export type CCCardType = 'number' | 'skip' | 'reverse' | 'draw2' | 'wild' | 'wild4';
 
-interface CCCard {
+export interface CCCard {
   id: string;
   color: CCColor | null;
   type: CCCardType;

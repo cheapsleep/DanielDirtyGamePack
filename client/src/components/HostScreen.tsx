@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { socket, socketServerUrl } from '../socket';
 import DrawingCanvas, { useStrokeReceiver } from './DrawingCanvas';
-import CardCalamityCard, { ActiveColorIndicator, DirectionIndicator } from './CardCalamityCard';
+import CardCalamityCard, { ActiveColorIndicator, DirectionIndicator, CCCard } from './CardCalamityCard';
 
 interface Player {
   id: string;
@@ -72,7 +72,7 @@ interface RoomState {
   ccDirection?: 1 | -1;
   ccDrawStack?: number;
   ccActiveColor?: 'red' | 'blue' | 'green' | 'yellow';
-  ccTopCard?: { id: string; color: 'red' | 'blue' | 'green' | 'yellow' | null; type: string; value?: number };
+  ccTopCard?: CCCard;
   ccHandCounts?: Record<string, number>;
   ccTurnOrder?: string[];
   ccStackingEnabled?: boolean;
@@ -115,7 +115,6 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
   
   // Card Calamity state
   const [ccTimeLeft, setCcTimeLeft] = useState<number>(30);
-  const [ccLastPlayedCard, setCcLastPlayedCard] = useState<any>(null);
   
   // Initialize stroke receiver for SC
   const strokeReceiver = useStrokeReceiver();
@@ -415,7 +414,7 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
     : '';
   const isPatented = room ? (room.gameId ?? gameId) === 'dubiously-patented' : false;
   const isScribble = room ? (room.gameId ?? gameId) === 'scribble-scrabble' : false;
-  const isCardCalamity = room ? (room.gameId ?? gameId) === 'card-calamity' : false;
+  const _isCardCalamity = room ? (room.gameId ?? gameId) === 'card-calamity' : false;
   const isPromptPhase = room ? room.state === 'NL_ANSWER' : false;
   const isVotingPhase = room ? room.state === 'NL_VOTING' : false;
   const isResultsPhase = room ? room.state === 'NL_RESULTS' || room.state === 'DP_RESULTS' : false;

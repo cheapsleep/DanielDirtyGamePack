@@ -4,7 +4,7 @@ import { socket, socketServerUrl } from '../socket';
 
 import WoodenButton from './WoodenButton';
 import ScribbleCanvas from './DrawingCanvas';
-import CardCalamityCard, { ColorPicker, ActiveColorIndicator } from './CardCalamityCard';
+import CardCalamityCard, { ColorPicker, ActiveColorIndicator, CCCard } from './CardCalamityCard';
 
 // Simple drawing canvas (for Dubiously Patented)
 function DrawingCanvas({ onChange }: { onChange: (data: string) => void }) {
@@ -156,7 +156,7 @@ interface RoomPublicState {
   ccDirection?: 1 | -1;
   ccDrawStack?: number;
   ccActiveColor?: 'red' | 'blue' | 'green' | 'yellow';
-  ccTopCard?: { id: string; color: 'red' | 'blue' | 'green' | 'yellow' | null; type: string; value?: number };
+  ccTopCard?: CCCard;
   ccHandCounts?: Record<string, number>;
   ccTurnOrder?: string[];
   ccStackingEnabled?: boolean;
@@ -1389,7 +1389,7 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
               <div className="flex-1 overflow-x-auto overflow-y-hidden pb-4">
                 <div className="flex gap-2 px-4 min-w-min">
                   <AnimatePresence mode="popLayout">
-                    {ccHand.map((card, idx) => {
+                    {ccHand.map((card) => {
                       const isMyTurn = room?.ccCurrentPlayerId === playerId && gameState === 'CC_PLAYING';
                       const isSelected = ccSelectedCardId === card.id;
                       
@@ -1399,10 +1399,10 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
                         const topCard = room.ccTopCard;
                         // Wild cards always playable
                         if (card.type === 'wild' || card.type === 'wild4') {
-                          isPlayable = !room.ccDrawStack || room.ccDrawStack === 0 || (room.ccStackingEnabled && card.type === 'wild4' && topCard?.type === 'wild4');
+                          isPlayable = !room.ccDrawStack || room.ccDrawStack === 0 || (!!room.ccStackingEnabled && card.type === 'wild4' && topCard?.type === 'wild4');
                         } else if (room.ccDrawStack && room.ccDrawStack > 0) {
                           // Can only stack if enabled and matching
-                          isPlayable = room.ccStackingEnabled && card.type === 'draw2' && topCard?.type === 'draw2';
+                          isPlayable = !!room.ccStackingEnabled && card.type === 'draw2' && topCard?.type === 'draw2';
                         } else {
                           // Match color or type/value
                           isPlayable = card.color === room.ccActiveColor || 
