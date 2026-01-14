@@ -156,9 +156,11 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
     window.location.origin;
   const publicServerUrl =
     ((import.meta as any)?.env?.VITE_PUBLIC_SERVER_URL as string | undefined) ?? socketServerUrl;
-  // Clean URL format: /join/ABCD with optional server param
+  const defaultServerUrl = 'https://server.danieldgp.com';
+  // Clean URL format: /join/ABCD - only add server param if non-default
+  const needsServerParam = publicServerUrl && publicServerUrl !== defaultServerUrl;
   const joinUrl = roomCode ? `${joinBase}/join/${roomCode}${
-    publicServerUrl ? `?server=${encodeURIComponent(publicServerUrl)}` : ''
+    needsServerParam ? `?server=${encodeURIComponent(publicServerUrl)}` : ''
   }` : '';
 
   useEffect(() => {

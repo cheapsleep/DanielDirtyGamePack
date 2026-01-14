@@ -3,8 +3,9 @@ import { io } from 'socket.io-client';
 // Use the current hostname so phones can connect if they are on the same network
 const isProd = import.meta.env.PROD;
 const envUrl = import.meta.env.VITE_SERVER_URL;
-const defaultProdServerUrl = 'https://danieldirtygamepack.onrender.com';
+const defaultProdServerUrl = 'https://server.danieldgp.com';
 
+// Check for server param in pathname: /join/CODE?server=...
 const serverParamFromSearch = new URLSearchParams(window.location.search).get('server') ?? undefined;
 const serverParamFromHash = (() => {
   const hash = window.location.hash;
@@ -26,20 +27,6 @@ const resolvedUrl = (() => {
     window.location.protocol === 'https:' && trimmed.startsWith('http://')
       ? `https://${trimmed.slice('http://'.length)}`
       : trimmed;
-
-  if (!isProd) return upgradedForHttps;
-
-  if (upgradedForHttps.includes('onrender.com')) return upgradedForHttps;
-
-  const host = window.location.hostname;
-  const looksLikeVercel = host.endsWith('vercel.app') || host.endsWith('vercel.app.');
-  const pointsAtSameHost = upgradedForHttps.includes(host);
-  const pointsAtPort3001 = upgradedForHttps.includes(':3001');
-  const pointsAtVercel = upgradedForHttps.includes('vercel.app');
-
-  if ((looksLikeVercel && pointsAtSameHost && pointsAtPort3001) || pointsAtVercel) {
-    return defaultProdServerUrl;
-  }
 
   return upgradedForHttps;
 })();
