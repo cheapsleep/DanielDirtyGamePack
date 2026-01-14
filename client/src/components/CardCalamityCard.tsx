@@ -112,7 +112,7 @@ export default function CardCalamityCard({
         shadow-lg 
         relative 
         overflow-hidden
-        ${disabled ? 'opacity-50 grayscale' : ''}
+        ${disabled ? 'opacity-60' : ''}
         ${selected ? 'ring-4 ring-white ring-offset-2 ring-offset-slate-900 -translate-y-4' : ''}
         ${className}
       `}

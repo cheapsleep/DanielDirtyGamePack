@@ -1730,36 +1730,38 @@ export class GameManager {
 
   // ==================== CARD CALAMITY METHODS ====================
 
-  private createCCDeck(): CCCard[] {
+  private createCCDeck(numDecks: number = 1): CCCard[] {
     const deck: CCCard[] = [];
     const colors: CCColor[] = ['red', 'blue', 'green', 'yellow'];
     
-    for (const color of colors) {
-      // One 0 card per color
-      deck.push({ id: uuidv4(), color, type: 'number', value: 0 });
-      
-      // Two of each 1-9 per color
-      for (let i = 1; i <= 9; i++) {
-        deck.push({ id: uuidv4(), color, type: 'number', value: i });
-        deck.push({ id: uuidv4(), color, type: 'number', value: i });
+    for (let d = 0; d < numDecks; d++) {
+      for (const color of colors) {
+        // One 0 card per color per deck
+        deck.push({ id: uuidv4(), color, type: 'number', value: 0 });
+        
+        // Two of each 1-9 per color per deck
+        for (let i = 1; i <= 9; i++) {
+          deck.push({ id: uuidv4(), color, type: 'number', value: i });
+          deck.push({ id: uuidv4(), color, type: 'number', value: i });
+        }
+        
+        // Two Skip, Reverse, Draw2 per color per deck
+        for (let i = 0; i < 2; i++) {
+          deck.push({ id: uuidv4(), color, type: 'skip' });
+          deck.push({ id: uuidv4(), color, type: 'reverse' });
+          deck.push({ id: uuidv4(), color, type: 'draw2' });
+        }
       }
       
-      // Two Skip, Reverse, Draw2 per color
-      for (let i = 0; i < 2; i++) {
-        deck.push({ id: uuidv4(), color, type: 'skip' });
-        deck.push({ id: uuidv4(), color, type: 'reverse' });
-        deck.push({ id: uuidv4(), color, type: 'draw2' });
+      // 4 Wild cards per deck
+      for (let i = 0; i < 4; i++) {
+        deck.push({ id: uuidv4(), color: null, type: 'wild' });
       }
-    }
-    
-    // 4 Wild cards
-    for (let i = 0; i < 4; i++) {
-      deck.push({ id: uuidv4(), color: null, type: 'wild' });
-    }
-    
-    // 4 Wild Draw Four cards
-    for (let i = 0; i < 4; i++) {
-      deck.push({ id: uuidv4(), color: null, type: 'wild4' });
+      
+      // 4 Wild Draw Four cards per deck
+      for (let i = 0; i < 4; i++) {
+        deck.push({ id: uuidv4(), color: null, type: 'wild4' });
+      }
     }
     
     return deck;
@@ -1777,8 +1779,14 @@ export class GameManager {
   private startCardCalamity(room: Room) {
     const activePlayers = this.getActivePlayers(room);
     
+    // Emit game start event for dealing animation
+    this.io.to(room.code).emit('cc_game_start', { playerCount: activePlayers.length });
+    
+    // Calculate number of decks: 1 deck for 2-3 players, 2 for 4-5, 3 for 6-7, etc.
+    const numDecks = Math.max(1, Math.ceil(activePlayers.length / 2));
+    
     // Create and shuffle deck
-    room.ccDeck = this.shuffleDeck(this.createCCDeck());
+    room.ccDeck = this.shuffleDeck(this.createCCDeck(numDecks));
     room.ccDiscardPile = [];
     room.ccPlayerHands = {};
     room.ccDirection = 1;
@@ -2036,6 +2044,8 @@ export class GameManager {
           const topCard = room.ccDiscardPile.pop()!;
           room.ccDeck = this.shuffleDeck(room.ccDiscardPile);
           room.ccDiscardPile = [topCard];
+          // Notify clients about the shuffle
+          this.io.to(room.code).emit('cc_deck_shuffled');
         } else {
           // No cards left anywhere
           break;

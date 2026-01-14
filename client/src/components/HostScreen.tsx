@@ -115,6 +115,9 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
   
   // Card Calamity state
   const [ccTimeLeft, setCcTimeLeft] = useState<number>(30);
+  const [ccIsShuffling, setCcIsShuffling] = useState<boolean>(false);
+  const [ccIsDealing, setCcIsDealing] = useState<boolean>(false);
+  const [ccDealingStep, setCcDealingStep] = useState<'shuffle' | 'deal' | 'flip' | 'done'>('done');
   
   // Initialize stroke receiver for SC
   const strokeReceiver = useStrokeReceiver();
@@ -285,8 +288,25 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
         setCcTimeLeft(data.timeLeft);
     });
 
+    socket.on('cc_game_start', () => {
+        // Trigger dealing animation sequence
+        setCcIsDealing(true);
+        setCcDealingStep('shuffle');
+        setTimeout(() => setCcDealingStep('deal'), 1500);
+        setTimeout(() => setCcDealingStep('flip'), 3500);
+        setTimeout(() => {
+            setCcDealingStep('done');
+            setCcIsDealing(false);
+        }, 4500);
+    });
+
     socket.on('cc_game_end', () => {
         // Game end handled via room_update
+    });
+
+    socket.on('cc_deck_shuffled', () => {
+        setCcIsShuffling(true);
+        setTimeout(() => setCcIsShuffling(false), 1500);
     });
 
     socket.on('game_over', () => {
@@ -356,7 +376,9 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
       socket.off('sc_round_end');
       socket.off('sc_game_end');
       socket.off('cc_timer');
+      socket.off('cc_game_start');
       socket.off('cc_game_end');
+      socket.off('cc_deck_shuffled');
       socket.off('game_over');
       socket.off('error');
     };
@@ -930,6 +952,156 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
         {/* Card Calamity - Playing */}
         {(room.state === 'CC_PLAYING' || room.state === 'CC_PICK_COLOR') && (
             <div className="w-full h-full flex flex-col p-4">
+                {/* Dealing animation overlay */}
+                <AnimatePresence>
+                    {ccIsDealing && (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="absolute inset-0 z-50 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col items-center justify-center"
+                        >
+                            {/* Shuffling phase */}
+                            {ccDealingStep === 'shuffle' && (
+                                <motion.div
+                                    initial={{ scale: 0 }}
+                                    animate={{ scale: 1 }}
+                                    className="flex flex-col items-center gap-6"
+                                >
+                                    <motion.div
+                                        className="text-8xl"
+                                        animate={{ rotate: [0, -20, 20, -20, 20, 0] }}
+                                        transition={{ duration: 0.5, repeat: Infinity }}
+                                    >
+                                        🃏
+                                    </motion.div>
+                                    <div className="relative">
+                                        {/* Stack of cards shuffling */}
+                                        {[...Array(5)].map((_, i) => (
+                                            <motion.div
+                                                key={i}
+                                                className="absolute w-32 h-48 bg-gradient-to-br from-blue-600 to-purple-700 rounded-lg border-4 border-white shadow-xl"
+                                                style={{ 
+                                                    left: '50%',
+                                                    top: '50%',
+                                                }}
+                                                animate={{
+                                                    x: [-64 + i * 5, -64 + Math.sin(i * 2) * 40, -64 - Math.sin(i * 2) * 40, -64 + i * 5],
+                                                    y: [-96 + i * 3, -96 + Math.cos(i * 3) * 30, -96 - Math.cos(i * 3) * 30, -96 + i * 3],
+                                                    rotate: [i * 5, i * 5 + 20, i * 5 - 20, i * 5],
+                                                }}
+                                                transition={{ duration: 0.4, repeat: Infinity, delay: i * 0.05 }}
+                                            />
+                                        ))}
+                                    </div>
+                                    <motion.p
+                                        className="text-3xl font-bold text-white mt-32"
+                                        animate={{ opacity: [1, 0.5, 1] }}
+                                        transition={{ duration: 0.5, repeat: Infinity }}
+                                    >
+                                        🔀 Shuffling the deck... 🔀
+                                    </motion.p>
+                                </motion.div>
+                            )}
+
+                            {/* Dealing phase */}
+                            {ccDealingStep === 'deal' && (
+                                <motion.div
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    className="flex flex-col items-center gap-8"
+                                >
+                                    {/* Deck in center */}
+                                    <div className="relative">
+                                        <div className="w-32 h-48 bg-gradient-to-br from-blue-600 to-purple-700 rounded-lg border-4 border-white shadow-xl" />
+                                        
+                                        {/* Cards flying out to players */}
+                                        {room.ccTurnOrder?.map((_, idx) => {
+                                            const angle = (idx / (room.ccTurnOrder?.length ?? 1)) * 2 * Math.PI - Math.PI / 2;
+                                            const targetX = Math.cos(angle) * 200;
+                                            const targetY = Math.sin(angle) * 150;
+                                            
+                                            return [...Array(7)].map((__, cardIdx) => (
+                                                <motion.div
+                                                    key={`${idx}-${cardIdx}`}
+                                                    className="absolute w-16 h-24 bg-gradient-to-br from-blue-600 to-purple-700 rounded-md border-2 border-white shadow-lg"
+                                                    style={{ left: 8, top: 12 }}
+                                                    initial={{ x: 0, y: 0, opacity: 1 }}
+                                                    animate={{ 
+                                                        x: targetX,
+                                                        y: targetY,
+                                                        opacity: [1, 1, 0],
+                                                    }}
+                                                    transition={{ 
+                                                        duration: 0.4,
+                                                        delay: idx * 0.3 + cardIdx * 0.08,
+                                                        ease: 'easeOut'
+                                                    }}
+                                                />
+                                            ));
+                                        })}
+                                    </div>
+                                    
+                                    <motion.p
+                                        className="text-3xl font-bold text-white"
+                                        animate={{ opacity: [1, 0.7, 1] }}
+                                        transition={{ duration: 0.3, repeat: Infinity }}
+                                    >
+                                        🎴 Dealing 7 cards to each player... 🎴
+                                    </motion.p>
+                                </motion.div>
+                            )}
+
+                            {/* Flip first card phase */}
+                            {ccDealingStep === 'flip' && (
+                                <motion.div
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    className="flex flex-col items-center gap-6"
+                                >
+                                    {/* Card flipping animation */}
+                                    <motion.div
+                                        className="w-40 h-56 relative"
+                                        style={{ perspective: 1000 }}
+                                    >
+                                        <motion.div
+                                            className="w-full h-full"
+                                            initial={{ rotateY: 0 }}
+                                            animate={{ rotateY: 180 }}
+                                            transition={{ duration: 0.6, ease: 'easeInOut' }}
+                                            style={{ transformStyle: 'preserve-3d' }}
+                                        >
+                                            {/* Card back */}
+                                            <div 
+                                                className="absolute inset-0 bg-gradient-to-br from-blue-600 to-purple-700 rounded-lg border-4 border-white shadow-xl flex items-center justify-center"
+                                                style={{ backfaceVisibility: 'hidden' }}
+                                            >
+                                                <span className="text-6xl">🃏</span>
+                                            </div>
+                                            {/* Card front */}
+                                            <div 
+                                                className="absolute inset-0 bg-gradient-to-br from-yellow-500 to-orange-600 rounded-lg border-4 border-white shadow-xl flex items-center justify-center"
+                                                style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
+                                            >
+                                                <span className="text-4xl font-bold text-white">?</span>
+                                            </div>
+                                        </motion.div>
+                                    </motion.div>
+                                    
+                                    <motion.p
+                                        className="text-3xl font-bold text-white"
+                                        initial={{ opacity: 0, y: 20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ delay: 0.3 }}
+                                    >
+                                        ✨ Flipping the first card! ✨
+                                    </motion.p>
+                                </motion.div>
+                            )}
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
                 {/* Top bar: Timer and info */}
                 <div className="flex justify-between items-center mb-4">
                     <div className="flex items-center gap-4">
@@ -994,12 +1166,35 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
 
                     {/* Center: Discard pile */}
                     <div className="relative z-10">
+                        {/* Shuffle animation overlay */}
+                        <AnimatePresence>
+                            {ccIsShuffling && (
+                                <motion.div
+                                    initial={{ opacity: 0, scale: 0.8 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    exit={{ opacity: 0, scale: 0.8 }}
+                                    className="absolute inset-0 flex items-center justify-center z-20"
+                                >
+                                    <motion.div
+                                        animate={{ rotate: [0, 360] }}
+                                        transition={{ duration: 0.5, repeat: 2, ease: 'linear' }}
+                                        className="text-6xl"
+                                    >
+                                        🔀
+                                    </motion.div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
                         <AnimatePresence mode="popLayout">
                             {room.ccTopCard && (
                                 <motion.div
                                     key={room.ccTopCard.id}
                                     initial={{ scale: 0.5, rotate: -180, opacity: 0 }}
-                                    animate={{ scale: 1, rotate: 0, opacity: 1 }}
+                                    animate={{ 
+                                        scale: ccIsShuffling ? 0.9 : 1, 
+                                        rotate: ccIsShuffling ? 10 : 0, 
+                                        opacity: 1 
+                                    }}
                                     exit={{ scale: 0.8, opacity: 0 }}
                                     transition={{ type: 'spring', stiffness: 300, damping: 20 }}
                                 >
@@ -1009,6 +1204,22 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
                         </AnimatePresence>
                     </div>
                 </div>
+
+                {/* Shuffle notification */}
+                <AnimatePresence>
+                    {ccIsShuffling && (
+                        <motion.div
+                            initial={{ y: -50, opacity: 0 }}
+                            animate={{ y: 0, opacity: 1 }}
+                            exit={{ y: -50, opacity: 0 }}
+                            className="flex justify-center mb-4"
+                        >
+                            <div className="px-6 py-3 rounded-xl text-xl font-bold bg-purple-600 text-white">
+                                🔀 Shuffling discard pile back into deck! 🔀
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
 
                 {/* Bottom: Last action */}
                 <AnimatePresence>
