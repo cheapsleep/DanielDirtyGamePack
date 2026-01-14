@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { QRCodeSVG } from 'qrcode.react';
 import { socket, socketServerUrl } from '../socket';
 import DrawingCanvas, { useStrokeReceiver } from './DrawingCanvas';
 import CardCalamityCard, { ActiveColorIndicator, DirectionIndicator, CCCard } from './CardCalamityCard';
@@ -159,8 +160,6 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
   const joinUrl = roomCode ? `${joinBase}#/join?room=${roomCode}${
     publicServerUrl ? `&server=${encodeURIComponent(publicServerUrl)}` : ''
   }` : '';
-
-  const qrSrc = roomCode ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(joinUrl)}` : '';
 
   useEffect(() => {
     if (shortUrl || !joinUrl) return;
@@ -461,8 +460,8 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
           <h2 className="text-xl text-slate-400">JOIN AT</h2>
           <h1 className="text-4xl font-bold text-blue-400">{displayUrl}</h1>
           <div className="flex items-center gap-4 mt-3">
-            {qrSrc && (
-              <img src={qrSrc} alt="Join QR code" className="w-24 h-24 bg-white p-1 rounded" />
+            {joinUrl && (
+              <QRCodeSVG value={joinUrl} size={96} bgColor="#ffffff" fgColor="#000000" className="p-1 bg-white rounded" />
             )}
             <div>
               <div className="text-sm text-slate-500 uppercase tracking-widest break-words">{title}</div>
