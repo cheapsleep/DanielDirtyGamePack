@@ -120,6 +120,9 @@ type GameState =
   | 'CC_PLAYING'
   | 'CC_PICK_COLOR'
   | 'CC_RESULTS'
+  | 'SSS_DRAWING'
+  | 'SSS_VOTING'
+  | 'SSS_RESULTS'
   | 'END';
 
 interface RoomPublicState {
