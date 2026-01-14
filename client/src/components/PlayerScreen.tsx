@@ -338,7 +338,7 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
     });
 
     // Card Calamity events
-    socket.on('cc_hand', (data: { cards: { id: string; color: 'red' | 'blue' | 'green' | 'yellow' | null; type: string; value?: number }[] }) => {
+    socket.on('cc_hand', (data: { cards: CCCard[] }) => {
       setCcHand(data.cards);
       setCcSelectedCardId(null);
     });
