@@ -191,13 +191,14 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
   const publicServerUrl =
     ((import.meta as any)?.env?.VITE_PUBLIC_SERVER_URL as string | undefined) ?? socketServerUrl;
   const defaultServerUrl = 'https://server.danielsdgp.com';
-  // Clean URL format: /join/ABCD - only add server param if non-default
-  const needsServerParam = publicServerUrl && publicServerUrl !== defaultServerUrl;
-  const joinUrl = roomCode ? `${joinBase}/join/${roomCode}${
-    needsServerParam ? `?server=${encodeURIComponent(publicServerUrl)}` : ''
-  }` : '';
-  // Display URL without https://www. prefix
-  const displayUrl = joinUrl.replace(/^https?:\/\/(www\.)?/, '');
+    // Clean URL format: /join/ABCD - never add server param in production
+    const isProd = (import.meta as any)?.env?.PROD;
+    const needsServerParam = !isProd && publicServerUrl && publicServerUrl !== defaultServerUrl;
+    const joinUrl = roomCode ? `${joinBase}/join/${roomCode}${
+        needsServerParam ? `?server=${encodeURIComponent(publicServerUrl)}` : ''
+    }` : '';
+    // Display URL without https://www. prefix
+    const displayUrl = joinUrl.replace(/^https?:\/\/(www\.)?/, '');
 
   useEffect(() => {
     const storageKey = `host:${gameId}`;
