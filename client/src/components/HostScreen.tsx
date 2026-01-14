@@ -162,6 +162,8 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
   const joinUrl = roomCode ? `${joinBase}/join/${roomCode}${
     needsServerParam ? `?server=${encodeURIComponent(publicServerUrl)}` : ''
   }` : '';
+  // Display URL without https://www. prefix
+  const displayUrl = joinUrl.replace(/^https?:\/\/(www\.)?/, '');
 
   useEffect(() => {
     const storageKey = `host:${gameId}`;
@@ -397,6 +399,17 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
             ? 'Card Calamity'
             : 'Nasty Libs'
     : '';
+  const gameLogo = room
+    ? (room.gameId ?? gameId) === 'dubiously-patented'
+      ? '/assets/Dubiously_Patented_Logo.png'
+      : (room.gameId ?? gameId) === 'autism-assessment'
+        ? '/assets/Autism_Assessment_Logo.png'
+        : (room.gameId ?? gameId) === 'scribble-scrabble'
+          ? '/assets/Scribble_Scrabble_Logo.png'
+          : (room.gameId ?? gameId) === 'card-calamity'
+            ? '/assets/Card_Calamity_Logo.svg'
+            : '/assets/Nasty_Libs_Logo.svg'
+    : '';
   const isPatented = room ? (room.gameId ?? gameId) === 'dubiously-patented' : false;
   const isScribble = room ? (room.gameId ?? gameId) === 'scribble-scrabble' : false;
   const isPromptPhase = room ? room.state === 'NL_ANSWER' : false;
@@ -443,18 +456,18 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
       <div className="flex justify-between items-center mb-8 border-b border-slate-700 pb-4">
         <div>
           <h2 className="text-xl text-slate-400">JOIN AT</h2>
-          <h1 className="text-4xl font-bold text-blue-400">{joinUrl}</h1>
+          <h1 className="text-4xl font-bold text-blue-400">{displayUrl}</h1>
           <div className="flex items-center gap-4 mt-3">
             {joinUrl && (
               <QRCodeSVG value={joinUrl} size={96} bgColor="#ffffff" fgColor="#000000" className="p-1 bg-white rounded" />
             )}
-            <div>
-              <div className="text-sm text-slate-500 uppercase tracking-widest break-words">{title}</div>
-              <div className="text-xs text-slate-400 mt-2 break-words">{joinUrl}</div>
-            </div>
+            <div className="text-sm text-slate-500 uppercase tracking-widest break-words">{title}</div>
           </div>
         </div>
-        <div className="text-center">
+        <div className="text-center flex flex-col items-center">
+            {gameLogo && (
+              <img src={gameLogo} alt={title} className="h-24 mb-2 object-contain" />
+            )}
             <h2 className="text-xl text-slate-400">ROOM CODE</h2>
             <h1 className="text-6xl font-black text-pink-500 tracking-widest">{room.code}</h1>
             <div className="text-sm text-slate-500 mt-2 uppercase tracking-widest">Controller: {controllerName}</div>
