@@ -195,6 +195,8 @@ export default function PlayerScreen() {
   const [scRoundScores, setScRoundScores] = useState<Record<string, number>>({});
   // Card Calamity state
   const [ccHand, setCcHand] = useState<CCCard[]>([]);
+  const [ccPendingHand, setCcPendingHand] = useState<CCCard[]>([]);
+  const [ccIsDealing, setCcIsDealing] = useState(false);
   const [ccTimeLeft, setCcTimeLeft] = useState(30);
   const [ccSelectedCardId, setCcSelectedCardId] = useState<string | null>(null);
 
@@ -341,8 +343,19 @@ export default function PlayerScreen() {
     });
 
     // Card Calamity events
+    socket.on('cc_game_start', () => {
+      // Start dealing animation - cards will be revealed after 4.5 seconds
+      setCcIsDealing(true);
+      setCcHand([]);
+      setCcPendingHand([]);
+      setTimeout(() => {
+        setCcIsDealing(false);
+      }, 4500);
+    });
+
     socket.on('cc_hand', (data: { cards: CCCard[] }) => {
-      setCcHand(data.cards);
+      // Store in pending hand - the useEffect will transfer when appropriate
+      setCcPendingHand(data.cards);
       setCcSelectedCardId(null);
     });
 
@@ -423,6 +436,7 @@ export default function PlayerScreen() {
       socket.off('sc_clear_canvas');
       socket.off('sc_round_end');
       socket.off('sc_game_end');
+      socket.off('cc_game_start');
       socket.off('cc_hand');
       socket.off('cc_timer');
       socket.off('cc_invalid_play');
@@ -433,6 +447,14 @@ export default function PlayerScreen() {
       socket.off('lobby_closed');
     };
   }, []);
+
+  // When dealing animation completes, or if we're not dealing, transfer pending hand to actual hand
+  useEffect(() => {
+    if (!ccIsDealing && ccPendingHand.length > 0) {
+      setCcHand(ccPendingHand);
+      setCcPendingHand([]);
+    }
+  }, [ccIsDealing, ccPendingHand]);
 
   const handleJoin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1398,72 +1420,106 @@ export default function PlayerScreen() {
 
             {/* Hand display */}
             <div className="mt-4">
-              <div className="text-sm text-slate-400 text-center mb-2">
-                Your hand ({ccHand.length} cards)
-              </div>
-              
-              <div className="overflow-x-auto pb-4">
-                <div className="flex gap-3 px-4 min-w-min justify-center flex-wrap">
-                  <AnimatePresence mode="popLayout">
-                    {ccHand.map((card) => {
-                      const isMyTurn = room?.ccCurrentPlayerId === playerId && gameState === 'CC_PLAYING';
-                      const isSelected = ccSelectedCardId === card.id;
-                      
-                      // Check if card is playable
-                      let isPlayable = false;
-                      if (isMyTurn && room?.ccActiveColor) {
-                        const topCard = room.ccTopCard;
-                        // Wild cards always playable
-                        if (card.type === 'wild' || card.type === 'wild4') {
-                          isPlayable = !room.ccDrawStack || room.ccDrawStack === 0 || (!!room.ccStackingEnabled && card.type === 'wild4' && topCard?.type === 'wild4');
-                        } else if (room.ccDrawStack && room.ccDrawStack > 0) {
-                          // Can only stack if enabled and matching
-                          isPlayable = !!room.ccStackingEnabled && card.type === 'draw2' && topCard?.type === 'draw2';
-                        } else {
-                          // Match color or type/value
-                          isPlayable = card.color === room.ccActiveColor || 
-                            (card.type === 'number' && topCard?.type === 'number' && card.value === topCard?.value) ||
-                            (card.type === topCard?.type && card.type !== 'number');
-                        }
-                      }
-                      
-                      return (
-                        <motion.div
-                          key={card.id}
-                          layout
-                          initial={{ scale: 0, rotate: -180 }}
-                          animate={{ 
-                            scale: 1, 
-                            rotate: 0,
-                            y: isSelected ? -20 : 0
-                          }}
-                          exit={{ scale: 0, x: -100 }}
-                          transition={{ type: 'spring', stiffness: 300 }}
-                        >
-                          <CardCalamityCard
-                            card={card}
-                            disabled={!isMyTurn || !isPlayable}
-                            selected={isSelected}
-                            small
-                            onClick={() => {
-                              if (!isMyTurn || !isPlayable) return;
-                              
-                              if (isSelected) {
-                                // Play the card
-                                socket.emit('game_action', { action: 'CC_PLAY_CARD', cardId: card.id });
-                                setCcSelectedCardId(null);
-                              } else {
-                                // Select the card
-                                setCcSelectedCardId(card.id);
-                              }
-                            }}
-                          />
-                        </motion.div>
-                      );
-                    })}
-                  </AnimatePresence>
-                </div>
-              </div>
+              {ccIsDealing ? (
+                /* Dealing animation */
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="text-center py-8"
+                >
+                  <motion.div
+                    animate={{ 
+                      rotate: [0, -10, 10, -10, 10, 0],
+                      scale: [1, 1.1, 1]
+                    }}
+                    transition={{ duration: 0.5, repeat: Infinity }}
+                    className="text-6xl mb-4"
+                  >
+                    🃏
+                  </motion.div>
+                  <motion.p
+                    className="text-xl font-bold text-yellow-400"
+                    animate={{ opacity: [1, 0.5, 1] }}
+                    transition={{ duration: 0.5, repeat: Infinity }}
+                  >
+                    Dealing cards...
+                  </motion.p>
+                </motion.div>
+              ) : (
+                <>
+                  <div className="text-sm text-slate-400 text-center mb-2">
+                    Your hand ({ccHand.length} cards)
+                  </div>
+                  
+                  <div className="overflow-x-auto pb-4">
+                    <div className="flex gap-3 px-4 min-w-min justify-center flex-wrap">
+                      <AnimatePresence mode="popLayout">
+                        {ccHand.map((card, index) => {
+                          const isMyTurn = room?.ccCurrentPlayerId === playerId && gameState === 'CC_PLAYING';
+                          const isSelected = ccSelectedCardId === card.id;
+                          
+                          // Check if card is playable
+                          let isPlayable = false;
+                          if (isMyTurn && room?.ccActiveColor) {
+                            const topCard = room.ccTopCard;
+                            // Wild cards always playable
+                            if (card.type === 'wild' || card.type === 'wild4') {
+                              isPlayable = !room.ccDrawStack || room.ccDrawStack === 0 || (!!room.ccStackingEnabled && card.type === 'wild4' && topCard?.type === 'wild4');
+                            } else if (room.ccDrawStack && room.ccDrawStack > 0) {
+                              // Can only stack if enabled and matching
+                              isPlayable = !!room.ccStackingEnabled && card.type === 'draw2' && topCard?.type === 'draw2';
+                            } else {
+                              // Match color or type/value
+                              isPlayable = card.color === room.ccActiveColor || 
+                                (card.type === 'number' && topCard?.type === 'number' && card.value === topCard?.value) ||
+                                (card.type === topCard?.type && card.type !== 'number');
+                            }
+                          }
+                          
+                          return (
+                            <motion.div
+                              key={card.id}
+                              layout
+                              initial={{ scale: 0, rotate: -180, y: -100, opacity: 0 }}
+                              animate={{ 
+                                scale: 1, 
+                                rotate: 0,
+                                y: isSelected ? -20 : 0,
+                                opacity: 1
+                              }}
+                              exit={{ scale: 0, x: -100 }}
+                              transition={{ 
+                                type: 'spring', 
+                                stiffness: 300,
+                                delay: index * 0.1 // Stagger the cards
+                              }}
+                            >
+                              <CardCalamityCard
+                                card={card}
+                                disabled={!isMyTurn || !isPlayable}
+                                selected={isSelected}
+                                small
+                                onClick={() => {
+                                  if (!isMyTurn || !isPlayable) return;
+                                  
+                                  if (isSelected) {
+                                    // Play the card
+                                    socket.emit('game_action', { action: 'CC_PLAY_CARD', cardId: card.id });
+                                    setCcSelectedCardId(null);
+                                  } else {
+                                    // Select the card
+                                    setCcSelectedCardId(card.id);
+                                  }
+                                }}
+                              />
+                            </motion.div>
+                          );
+                        })}
+                      </AnimatePresence>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Draw button */}
