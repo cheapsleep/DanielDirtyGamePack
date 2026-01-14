@@ -1,8 +1,10 @@
 import { useEffect, useState, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { socket, socketServerUrl } from '../socket';
 
 import WoodenButton from './WoodenButton';
 import ScribbleCanvas from './DrawingCanvas';
+import CardCalamityCard, { ColorPicker, ActiveColorIndicator } from './CardCalamityCard';
 
 // Simple drawing canvas (for Dubiously Patented)
 function DrawingCanvas({ onChange }: { onChange: (data: string) => void }) {
@@ -119,6 +121,9 @@ type GameState =
   | 'SC_WORD_PICK'
   | 'SC_DRAWING'
   | 'SC_ROUND_RESULTS'
+  | 'CC_PLAYING'
+  | 'CC_PICK_COLOR'
+  | 'CC_RESULTS'
   | 'END';
 
 interface RoomPublicState {
@@ -145,6 +150,20 @@ interface RoomPublicState {
   scCorrectGuessers?: string[];
   scScores?: Record<string, number>;
   scGuessChat?: { playerId: string; playerName: string; guess: string; isCorrect: boolean; isClose: boolean }[];
+  // Card Calamity fields
+  ccCurrentPlayerId?: string;
+  ccCurrentPlayerName?: string;
+  ccDirection?: 1 | -1;
+  ccDrawStack?: number;
+  ccActiveColor?: 'red' | 'blue' | 'green' | 'yellow';
+  ccTopCard?: { id: string; color: 'red' | 'blue' | 'green' | 'yellow' | null; type: string; value?: number };
+  ccHandCounts?: Record<string, number>;
+  ccTurnOrder?: string[];
+  ccStackingEnabled?: boolean;
+  ccLastAction?: { type: string; playerId: string; playerName: string; card?: any; color?: string };
+  ccWinnerId?: string;
+  ccWinnerName?: string;
+  ccPendingWildPlayerId?: string;
 }
 
 export default function PlayerScreen({ onBack }: PlayerScreenProps) {
@@ -178,6 +197,10 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
   const [scGuessChat, setScGuessChat] = useState<{ playerId: string; playerName: string; guess: string; isCorrect: boolean; isClose: boolean }[]>([]);
   const [scRoundWord, setScRoundWord] = useState<string>('');
   const [scRoundScores, setScRoundScores] = useState<Record<string, number>>({});
+  // Card Calamity state
+  const [ccHand, setCcHand] = useState<{ id: string; color: 'red' | 'blue' | 'green' | 'yellow' | null; type: string; value?: number }[]>([]);
+  const [ccTimeLeft, setCcTimeLeft] = useState(30);
+  const [ccSelectedCardId, setCcSelectedCardId] = useState<string | null>(null);
 
   useEffect(() => {
     const hash = window.location.hash;
@@ -314,6 +337,25 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
       // Game ended, handled by room state change
     });
 
+    // Card Calamity events
+    socket.on('cc_hand', (data: { cards: { id: string; color: 'red' | 'blue' | 'green' | 'yellow' | null; type: string; value?: number }[] }) => {
+      setCcHand(data.cards);
+      setCcSelectedCardId(null);
+    });
+
+    socket.on('cc_timer', (data: { timeLeft: number }) => {
+      setCcTimeLeft(data.timeLeft);
+    });
+
+    socket.on('cc_invalid_play', () => {
+      // Flash the selected card or show error
+      setCcSelectedCardId(null);
+    });
+
+    socket.on('cc_game_end', () => {
+      // Game ended, handled by room state change
+    });
+
     socket.on('error', (data) => {
         if (data?.code === 'GAME_ERROR') {
           setSubmitted(false);
@@ -363,6 +405,10 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
       socket.off('sc_clear_canvas');
       socket.off('sc_round_end');
       socket.off('sc_game_end');
+      socket.off('cc_hand');
+      socket.off('cc_timer');
+      socket.off('cc_invalid_play');
+      socket.off('cc_game_end');
       socket.off('error');
       socket.off('connect_error');
       socket.off('room_closed');
@@ -615,8 +661,35 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
                       </div>
                     )}
 
-                    {/* Bot controls - not for Scribble Scrabble */}
-                    {gameId !== 'scribble-scrabble' && (
+                    {/* Card Calamity settings */}
+                    {gameId === 'card-calamity' && (
+                      <div className="mb-6 p-4 bg-slate-800 rounded-lg">
+                        <h3 className="text-lg font-bold text-red-400 mb-3">Game Settings</h3>
+                        <div className="flex flex-col gap-3">
+                          <div>
+                            <label className="text-sm text-slate-400 block mb-1">+2/+4 Stacking:</label>
+                            <button
+                              onClick={() => socket.emit('game_action', { action: 'CC_TOGGLE_STACKING' })}
+                              className={`px-4 py-2 rounded font-bold w-full ${
+                                room?.ccStackingEnabled 
+                                  ? 'bg-green-500 text-black' 
+                                  : 'bg-slate-700 text-white'
+                              }`}
+                            >
+                              {room?.ccStackingEnabled ? '✓ ENABLED' : '✗ DISABLED'}
+                            </button>
+                            <p className="text-xs text-slate-500 mt-1">
+                              {room?.ccStackingEnabled 
+                                ? 'Players can stack +2 on +2 or +4 on +4' 
+                                : 'Players must draw immediately'}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Bot controls - not for Scribble Scrabble or Card Calamity */}
+                    {gameId !== 'scribble-scrabble' && gameId !== 'card-calamity' && (
                       <div className="flex gap-3 justify-center mb-4">
                         <WoodenButton type="button" variant="wood" onClick={handleAddBot} className="px-6">
                           ADD CPU
@@ -631,9 +704,9 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
                       type="button"
                       variant="red"
                       onClick={handleStartGame}
-                      disabled={totalPlayers < 3}
+                      disabled={totalPlayers < (gameId === 'card-calamity' || gameId === 'autism-assessment' ? 2 : 3)}
                       className={
-                        totalPlayers >= 3
+                        totalPlayers >= (gameId === 'card-calamity' || gameId === 'autism-assessment' ? 2 : 3)
                           ? 'w-full animate-bounce'
                           : 'w-full opacity-60 pointer-events-none'
                       }
@@ -641,7 +714,13 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
                       EVERYBODY'S IN!
                     </WoodenButton>
                     <p className="mt-4 text-sm text-slate-500">
-                      {gameId === 'scribble-scrabble' ? 'Minimum 3 players. No bots allowed!' : 'Minimum 3 players.'}
+                      {gameId === 'scribble-scrabble' 
+                        ? 'Minimum 3 players. No bots allowed!' 
+                        : gameId === 'card-calamity'
+                          ? 'Minimum 2 players. No bots allowed!'
+                          : gameId === 'autism-assessment'
+                            ? 'Minimum 2 players.'
+                            : 'Minimum 3 players.'}
                     </p>
                   </div>
                 ) : (
@@ -1243,6 +1322,195 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
             {!isController && (
               <p className="text-slate-400">Waiting for controller...</p>
             )}
+          </div>
+        )}
+
+        {/* Card Calamity - Playing */}
+        {(gameState === 'CC_PLAYING' || gameState === 'CC_PICK_COLOR') && (
+          <div className="w-full flex flex-col h-full max-h-full">
+            {/* Top info bar */}
+            <div className="flex justify-between items-center mb-4 px-2">
+              <div className="flex items-center gap-2">
+                {room?.ccActiveColor && <ActiveColorIndicator color={room.ccActiveColor} />}
+              </div>
+              <div className={`text-2xl font-mono font-bold ${ccTimeLeft <= 10 ? 'text-red-500 animate-pulse' : 'text-white'}`}>
+                {ccTimeLeft}s
+              </div>
+            </div>
+
+            {/* Your turn indicator / info */}
+            <div className="text-center mb-4">
+              {room?.ccCurrentPlayerId === playerId ? (
+                <motion.div
+                  initial={{ scale: 0.9 }}
+                  animate={{ scale: 1 }}
+                  className="text-2xl font-bold text-yellow-400"
+                >
+                  🎯 YOUR TURN!
+                </motion.div>
+              ) : gameState === 'CC_PICK_COLOR' && room?.ccPendingWildPlayerId === playerId ? (
+                <motion.div
+                  initial={{ scale: 0.9 }}
+                  animate={{ scale: 1 }}
+                  className="text-2xl font-bold text-purple-400"
+                >
+                  🎨 PICK A COLOR!
+                </motion.div>
+              ) : (
+                <div className="text-lg text-slate-400">
+                  Waiting for <span className="text-white font-bold">{room?.ccCurrentPlayerName}</span>...
+                </div>
+              )}
+              
+              {room?.ccDrawStack && room.ccDrawStack > 0 && (
+                <div className="text-xl font-bold text-red-400 animate-pulse mt-2">
+                  +{room.ccDrawStack} cards to draw!
+                </div>
+              )}
+            </div>
+
+            {/* Color Picker (if picking color) */}
+            {gameState === 'CC_PICK_COLOR' && room?.ccPendingWildPlayerId === playerId && (
+              <div className="flex justify-center mb-6">
+                <ColorPicker 
+                  onPick={(color) => {
+                    socket.emit('game_action', { action: 'CC_PICK_COLOR', color });
+                  }}
+                />
+              </div>
+            )}
+
+            {/* Hand display */}
+            <div className="flex-1 overflow-hidden flex flex-col">
+              <div className="text-sm text-slate-400 text-center mb-2">
+                Your hand ({ccHand.length} cards)
+              </div>
+              
+              <div className="flex-1 overflow-x-auto overflow-y-hidden pb-4">
+                <div className="flex gap-2 px-4 min-w-min">
+                  <AnimatePresence mode="popLayout">
+                    {ccHand.map((card, idx) => {
+                      const isMyTurn = room?.ccCurrentPlayerId === playerId && gameState === 'CC_PLAYING';
+                      const isSelected = ccSelectedCardId === card.id;
+                      
+                      // Check if card is playable
+                      let isPlayable = false;
+                      if (isMyTurn && room?.ccActiveColor) {
+                        const topCard = room.ccTopCard;
+                        // Wild cards always playable
+                        if (card.type === 'wild' || card.type === 'wild4') {
+                          isPlayable = !room.ccDrawStack || room.ccDrawStack === 0 || (room.ccStackingEnabled && card.type === 'wild4' && topCard?.type === 'wild4');
+                        } else if (room.ccDrawStack && room.ccDrawStack > 0) {
+                          // Can only stack if enabled and matching
+                          isPlayable = room.ccStackingEnabled && card.type === 'draw2' && topCard?.type === 'draw2';
+                        } else {
+                          // Match color or type/value
+                          isPlayable = card.color === room.ccActiveColor || 
+                            (card.type === 'number' && topCard?.type === 'number' && card.value === topCard?.value) ||
+                            (card.type === topCard?.type && card.type !== 'number');
+                        }
+                      }
+                      
+                      return (
+                        <motion.div
+                          key={card.id}
+                          layout
+                          initial={{ scale: 0, rotate: -180 }}
+                          animate={{ 
+                            scale: 1, 
+                            rotate: 0,
+                            y: isSelected ? -20 : 0
+                          }}
+                          exit={{ scale: 0, x: -100 }}
+                          transition={{ type: 'spring', stiffness: 300 }}
+                        >
+                          <CardCalamityCard
+                            card={card}
+                            disabled={!isMyTurn || !isPlayable}
+                            selected={isSelected}
+                            small
+                            onClick={() => {
+                              if (!isMyTurn || !isPlayable) return;
+                              
+                              if (isSelected) {
+                                // Play the card
+                                socket.emit('game_action', { action: 'CC_PLAY_CARD', cardId: card.id });
+                                setCcSelectedCardId(null);
+                              } else {
+                                // Select the card
+                                setCcSelectedCardId(card.id);
+                              }
+                            }}
+                          />
+                        </motion.div>
+                      );
+                    })}
+                  </AnimatePresence>
+                </div>
+              </div>
+            </div>
+
+            {/* Draw button */}
+            {room?.ccCurrentPlayerId === playerId && gameState === 'CC_PLAYING' && (
+              <div className="mt-4 px-4">
+                <WoodenButton
+                  type="button"
+                  variant="wood"
+                  onClick={() => {
+                    socket.emit('game_action', { action: 'CC_DRAW_CARD' });
+                    setCcSelectedCardId(null);
+                  }}
+                  className="w-full"
+                >
+                  📥 DRAW {room.ccDrawStack && room.ccDrawStack > 0 ? `(+${room.ccDrawStack})` : 'CARD'}
+                </WoodenButton>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Card Calamity - Results */}
+        {gameState === 'CC_RESULTS' && (
+          <div className="text-center w-full max-w-md mx-auto">
+            {room?.ccWinnerId === playerId ? (
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: 'spring' }}
+              >
+                <h1 className="text-4xl font-black text-yellow-400 mb-4">🏆 YOU WIN! 🏆</h1>
+              </motion.div>
+            ) : (
+              <h1 className="text-3xl font-bold text-slate-300 mb-4">
+                {room?.ccWinnerName} wins!
+              </h1>
+            )}
+            
+            <div className="bg-slate-800 rounded-lg p-4 mb-4">
+              <h3 className="text-lg font-semibold mb-2">Final Scores:</h3>
+              <div className="space-y-1">
+                {room?.players
+                  ?.sort((a, b) => {
+                    if (a.id === room?.ccWinnerId) return -1;
+                    if (b.id === room?.ccWinnerId) return 1;
+                    return b.score - a.score;
+                  })
+                  .map((player, i) => (
+                    <div key={player.id} className={`flex justify-between ${player.id === playerId ? 'text-yellow-400 font-bold' : 'text-slate-300'}`}>
+                      <span>{player.id === room?.ccWinnerId ? '👑' : `#${i + 1}`} {player.name}</span>
+                      <span>{player.score} pts</span>
+                    </div>
+                  ))}
+              </div>
+            </div>
+            
+            <WoodenButton type="button" variant="wood" onClick={() => {
+              setJoined(false);
+              setRoom(null);
+              setCcHand([]);
+            }} className="w-full">
+              BACK TO LOBBY
+            </WoodenButton>
           </div>
         )}
 

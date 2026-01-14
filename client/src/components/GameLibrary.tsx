@@ -40,6 +40,14 @@ export default function GameLibrary({ onSelectGame }: GameLibraryProps) {
       logo: '/assets/Scribble_Scrabble_Logo.png',
       minPlayers: 3,
     },
+    {
+      id: 'card-calamity',
+      title: 'CARD CALAMITY',
+      description: 'A chaotic card-matching showdown! Match colors or numbers, stack penalties, and be first to empty your hand. Wild cards welcome!',
+      color: 'bg-red-600',
+      logo: '/assets/Card_Calamity_Logo.svg',
+      minPlayers: 2,
+    },
   ];
 
   return (

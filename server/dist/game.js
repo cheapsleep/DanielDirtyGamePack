@@ -21,6 +21,7 @@ class GameManager {
         this.botRun = new Map();
         this.aqTimers = new Map(); // roomCode -> timer
         this.scTimers = new Map(); // roomCode -> timer (Scribble Scrabble)
+        this.ccTimers = new Map(); // roomCode -> timer (Card Calamity)
         this.io = io;
     }
     startAQTimer(room) {
@@ -360,6 +361,21 @@ class GameManager {
                 break;
             case 'SC_REVEAL_HINT':
                 this.handleSCRevealHint(room, socket.id);
+                break;
+            case 'CC_TOGGLE_STACKING':
+                if (this.isControllerSocket(room, socket.id) && room.state === 'LOBBY') {
+                    room.ccStackingEnabled = !room.ccStackingEnabled;
+                    this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+                }
+                break;
+            case 'CC_PLAY_CARD':
+                this.handleCCPlayCard(room, socket.id, data.cardId);
+                break;
+            case 'CC_DRAW_CARD':
+                this.handleCCDrawCard(room, socket.id);
+                break;
+            case 'CC_PICK_COLOR':
+                this.handleCCPickColor(room, socket.id, data.color);
                 break;
             case 'NEXT_ROUND':
                 if (this.isControllerSocket(room, socket.id)) {
@@ -798,6 +814,10 @@ class GameManager {
         }
         if (room.gameId === 'scribble-scrabble') {
             this.startScribbleScrabble(room);
+            return;
+        }
+        if (room.gameId === 'card-calamity') {
+            this.startCardCalamity(room);
             return;
         }
         // Initialize money for Dubiously Patented
@@ -1545,8 +1565,434 @@ class GameManager {
         this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
     }
     // ==================== END SCRIBBLE SCRABBLE METHODS ====================
+    // ==================== CARD CALAMITY METHODS ====================
+    createCCDeck() {
+        const deck = [];
+        const colors = ['red', 'blue', 'green', 'yellow'];
+        for (const color of colors) {
+            // One 0 card per color
+            deck.push({ id: (0, uuid_1.v4)(), color, type: 'number', value: 0 });
+            // Two of each 1-9 per color
+            for (let i = 1; i <= 9; i++) {
+                deck.push({ id: (0, uuid_1.v4)(), color, type: 'number', value: i });
+                deck.push({ id: (0, uuid_1.v4)(), color, type: 'number', value: i });
+            }
+            // Two Skip, Reverse, Draw2 per color
+            for (let i = 0; i < 2; i++) {
+                deck.push({ id: (0, uuid_1.v4)(), color, type: 'skip' });
+                deck.push({ id: (0, uuid_1.v4)(), color, type: 'reverse' });
+                deck.push({ id: (0, uuid_1.v4)(), color, type: 'draw2' });
+            }
+        }
+        // 4 Wild cards
+        for (let i = 0; i < 4; i++) {
+            deck.push({ id: (0, uuid_1.v4)(), color: null, type: 'wild' });
+        }
+        // 4 Wild Draw Four cards
+        for (let i = 0; i < 4; i++) {
+            deck.push({ id: (0, uuid_1.v4)(), color: null, type: 'wild4' });
+        }
+        return deck;
+    }
+    shuffleDeck(array) {
+        const shuffled = [...array];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        return shuffled;
+    }
+    startCardCalamity(room) {
+        var _a, _b;
+        const activePlayers = this.getActivePlayers(room);
+        // Create and shuffle deck
+        room.ccDeck = this.shuffleDeck(this.createCCDeck());
+        room.ccDiscardPile = [];
+        room.ccPlayerHands = {};
+        room.ccDirection = 1;
+        room.ccDrawStack = 0;
+        room.ccStackingEnabled = (_a = room.ccStackingEnabled) !== null && _a !== void 0 ? _a : false;
+        // Create turn order
+        room.ccTurnOrder = activePlayers.map(p => p.id);
+        // Deal 7 cards to each player
+        for (const player of activePlayers) {
+            room.ccPlayerHands[player.id] = room.ccDeck.splice(0, 7);
+        }
+        // Flip first card (keep flipping if it's a wild4)
+        let firstCard = room.ccDeck.shift();
+        while (firstCard.type === 'wild4') {
+            room.ccDeck.push(firstCard);
+            room.ccDeck = this.shuffleDeck(room.ccDeck);
+            firstCard = room.ccDeck.shift();
+        }
+        room.ccDiscardPile.push(firstCard);
+        // Set active color
+        room.ccActiveColor = (_b = firstCard.color) !== null && _b !== void 0 ? _b : 'red';
+        // Pick first player
+        room.ccCurrentPlayerId = room.ccTurnOrder[0];
+        // Handle first card effects
+        if (firstCard.type === 'skip') {
+            // Skip first player
+            room.ccCurrentPlayerId = this.getNextCCPlayer(room);
+        }
+        else if (firstCard.type === 'reverse') {
+            // Reverse direction
+            room.ccDirection = -1;
+            // In 2-player, reverse acts like skip
+            if (activePlayers.length === 2) {
+                room.ccCurrentPlayerId = this.getNextCCPlayer(room);
+            }
+        }
+        else if (firstCard.type === 'draw2') {
+            // First player must draw 2
+            room.ccDrawStack = 2;
+        }
+        else if (firstCard.type === 'wild') {
+            // First player picks color
+            room.state = 'CC_PICK_COLOR';
+            room.ccPendingWildPlayerId = room.ccCurrentPlayerId;
+            this.io.to(room.code).emit('game_started');
+            this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+            this.sendCCHands(room);
+            this.startCCTimer(room);
+            return;
+        }
+        room.state = 'CC_PLAYING';
+        room.currentRound = 1;
+        room.totalRounds = 1;
+        this.io.to(room.code).emit('game_started');
+        this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+        this.sendCCHands(room);
+        this.startCCTimer(room);
+    }
+    sendCCHands(room) {
+        var _a;
+        if (!room.ccPlayerHands)
+            return;
+        for (const player of room.players) {
+            if (!player.isBot && player.isConnected) {
+                const hand = (_a = room.ccPlayerHands[player.id]) !== null && _a !== void 0 ? _a : [];
+                this.io.to(player.socketId).emit('cc_hand', { cards: hand });
+            }
+        }
+    }
+    getNextCCPlayer(room, skip = false) {
+        var _a;
+        if (!room.ccTurnOrder || !room.ccCurrentPlayerId)
+            return (_a = room.ccCurrentPlayerId) !== null && _a !== void 0 ? _a : '';
+        const currentIndex = room.ccTurnOrder.indexOf(room.ccCurrentPlayerId);
+        let nextIndex = (currentIndex + room.ccDirection + room.ccTurnOrder.length) % room.ccTurnOrder.length;
+        if (skip) {
+            nextIndex = (nextIndex + room.ccDirection + room.ccTurnOrder.length) % room.ccTurnOrder.length;
+        }
+        return room.ccTurnOrder[nextIndex];
+    }
+    isValidCCPlay(room, card, playerId) {
+        var _a;
+        if (!((_a = room.ccDiscardPile) === null || _a === void 0 ? void 0 : _a.length) || !room.ccActiveColor)
+            return false;
+        const topCard = room.ccDiscardPile[room.ccDiscardPile.length - 1];
+        // If there's a draw stack and stacking is enabled, only +2 or +4 can be played
+        if (room.ccDrawStack && room.ccDrawStack > 0 && room.ccStackingEnabled) {
+            if (topCard.type === 'draw2' && card.type === 'draw2') {
+                return true; // Can stack +2 on +2
+            }
+            if (topCard.type === 'wild4' && card.type === 'wild4') {
+                return true; // Can stack +4 on +4
+            }
+            // Can't play anything else when there's a stack
+            return false;
+        }
+        // If draw stack and stacking disabled, can't play anything (must draw)
+        if (room.ccDrawStack && room.ccDrawStack > 0 && !room.ccStackingEnabled) {
+            return false;
+        }
+        // Wild cards can always be played
+        if (card.type === 'wild' || card.type === 'wild4') {
+            return true;
+        }
+        // Match color
+        if (card.color === room.ccActiveColor) {
+            return true;
+        }
+        // Match type/value
+        if (card.type === 'number' && topCard.type === 'number' && card.value === topCard.value) {
+            return true;
+        }
+        if (card.type === topCard.type && card.type !== 'number') {
+            return true;
+        }
+        return false;
+    }
+    handleCCPlayCard(room, socketId, cardId) {
+        var _a, _b, _c;
+        if (room.gameId !== 'card-calamity')
+            return;
+        if (room.state !== 'CC_PLAYING')
+            return;
+        const player = room.players.find(p => p.socketId === socketId);
+        if (!player || player.id !== room.ccCurrentPlayerId)
+            return;
+        const hand = (_a = room.ccPlayerHands) === null || _a === void 0 ? void 0 : _a[player.id];
+        if (!hand)
+            return;
+        const cardIndex = hand.findIndex(c => c.id === cardId);
+        if (cardIndex === -1)
+            return;
+        const card = hand[cardIndex];
+        if (!this.isValidCCPlay(room, card, player.id)) {
+            // Invalid play - notify player
+            this.io.to(socketId).emit('cc_invalid_play');
+            return;
+        }
+        // Clear timer
+        this.clearCCTimer(room.code);
+        // Remove card from hand
+        hand.splice(cardIndex, 1);
+        // Add to discard pile
+        room.ccDiscardPile.push(card);
+        // Set action
+        room.ccLastAction = {
+            type: 'play',
+            playerId: player.id,
+            playerName: player.name,
+            card
+        };
+        // Handle card effects
+        if (card.type === 'wild' || card.type === 'wild4') {
+            // Player needs to pick a color
+            room.ccPendingWildPlayerId = player.id;
+            if (card.type === 'wild4') {
+                room.ccDrawStack = ((_b = room.ccDrawStack) !== null && _b !== void 0 ? _b : 0) + 4;
+            }
+            room.state = 'CC_PICK_COLOR';
+            this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+            this.sendCCHands(room);
+            this.startCCTimer(room);
+            return;
+        }
+        // Set active color
+        room.ccActiveColor = card.color;
+        // Handle action cards
+        let skipNext = false;
+        if (card.type === 'skip') {
+            skipNext = true;
+        }
+        else if (card.type === 'reverse') {
+            room.ccDirection = room.ccDirection === 1 ? -1 : 1;
+            // In 2-player, reverse acts like skip
+            if (room.ccTurnOrder.length === 2) {
+                skipNext = true;
+            }
+        }
+        else if (card.type === 'draw2') {
+            room.ccDrawStack = ((_c = room.ccDrawStack) !== null && _c !== void 0 ? _c : 0) + 2;
+        }
+        // Check for win
+        if (hand.length === 0) {
+            this.endCardCalamity(room, player.id);
+            return;
+        }
+        // Move to next player
+        room.ccCurrentPlayerId = this.getNextCCPlayer(room, skipNext);
+        this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+        this.sendCCHands(room);
+        this.startCCTimer(room);
+    }
+    handleCCDrawCard(room, socketId) {
+        if (room.gameId !== 'card-calamity')
+            return;
+        if (room.state !== 'CC_PLAYING')
+            return;
+        const player = room.players.find(p => p.socketId === socketId);
+        if (!player || player.id !== room.ccCurrentPlayerId)
+            return;
+        this.clearCCTimer(room.code);
+        // Draw cards (either from draw stack or 1 card)
+        const drawCount = room.ccDrawStack && room.ccDrawStack > 0 ? room.ccDrawStack : 1;
+        this.drawCCCards(room, player.id, drawCount);
+        room.ccDrawStack = 0;
+        room.ccLastAction = {
+            type: 'draw',
+            playerId: player.id,
+            playerName: player.name
+        };
+        // Move to next player
+        room.ccCurrentPlayerId = this.getNextCCPlayer(room);
+        this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+        this.sendCCHands(room);
+        this.startCCTimer(room);
+    }
+    drawCCCards(room, playerId, count) {
+        var _a;
+        if (!room.ccDeck || !room.ccPlayerHands)
+            return;
+        const hand = (_a = room.ccPlayerHands[playerId]) !== null && _a !== void 0 ? _a : [];
+        for (let i = 0; i < count; i++) {
+            // Reshuffle discard pile if deck is empty
+            if (room.ccDeck.length === 0) {
+                if (room.ccDiscardPile && room.ccDiscardPile.length > 1) {
+                    const topCard = room.ccDiscardPile.pop();
+                    room.ccDeck = this.shuffleDeck(room.ccDiscardPile);
+                    room.ccDiscardPile = [topCard];
+                }
+                else {
+                    // No cards left anywhere
+                    break;
+                }
+            }
+            const card = room.ccDeck.shift();
+            if (card) {
+                hand.push(card);
+            }
+        }
+        room.ccPlayerHands[playerId] = hand;
+    }
+    handleCCPickColor(room, socketId, color) {
+        var _a, _b;
+        if (room.gameId !== 'card-calamity')
+            return;
+        if (room.state !== 'CC_PICK_COLOR')
+            return;
+        const player = room.players.find(p => p.socketId === socketId);
+        if (!player || player.id !== room.ccPendingWildPlayerId)
+            return;
+        const validColors = ['red', 'blue', 'green', 'yellow'];
+        if (!validColors.includes(color))
+            return;
+        this.clearCCTimer(room.code);
+        room.ccActiveColor = color;
+        room.ccPendingWildPlayerId = undefined;
+        room.ccLastAction = Object.assign(Object.assign({}, room.ccLastAction), { color });
+        // Check for win (if the wild was played and hand is empty)
+        const hand = (_a = room.ccPlayerHands) === null || _a === void 0 ? void 0 : _a[player.id];
+        if (hand && hand.length === 0) {
+            this.endCardCalamity(room, player.id);
+            return;
+        }
+        // Move to next player (skip if it was a +4)
+        const topCard = (_b = room.ccDiscardPile) === null || _b === void 0 ? void 0 : _b[room.ccDiscardPile.length - 1];
+        const skipNext = false; // +4 doesn't skip, next player must draw
+        room.ccCurrentPlayerId = this.getNextCCPlayer(room, skipNext);
+        room.state = 'CC_PLAYING';
+        this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+        this.sendCCHands(room);
+        this.startCCTimer(room);
+    }
+    startCCTimer(room) {
+        this.clearCCTimer(room.code);
+        const startTime = Date.now();
+        const duration = 30000; // 30 seconds
+        // Emit timer start
+        this.io.to(room.code).emit('cc_timer', { timeLeft: 30 });
+        // Countdown every second
+        const countdownInterval = setInterval(() => {
+            const elapsed = Date.now() - startTime;
+            const remaining = Math.max(0, Math.ceil((duration - elapsed) / 1000));
+            this.io.to(room.code).emit('cc_timer', { timeLeft: remaining });
+        }, 1000);
+        // Main timer
+        const timer = setTimeout(() => {
+            clearInterval(countdownInterval);
+            this.handleCCTimeout(room.code);
+        }, duration);
+        this.ccTimers.set(room.code, timer);
+        this.ccTimers.set(`${room.code}_interval`, countdownInterval);
+    }
+    clearCCTimer(roomCode) {
+        const timer = this.ccTimers.get(roomCode);
+        if (timer) {
+            clearTimeout(timer);
+            this.ccTimers.delete(roomCode);
+        }
+        const interval = this.ccTimers.get(`${roomCode}_interval`);
+        if (interval) {
+            clearInterval(interval);
+            this.ccTimers.delete(`${roomCode}_interval`);
+        }
+    }
+    handleCCTimeout(roomCode) {
+        var _a;
+        const room = this.rooms.get(roomCode);
+        if (!room)
+            return;
+        if (room.gameId !== 'card-calamity')
+            return;
+        const currentPlayer = room.players.find(p => p.id === room.ccCurrentPlayerId);
+        if (!currentPlayer)
+            return;
+        if (room.state === 'CC_PICK_COLOR') {
+            // Auto-pick a random color
+            const colors = ['red', 'blue', 'green', 'yellow'];
+            const randomColor = colors[Math.floor(Math.random() * colors.length)];
+            room.ccActiveColor = randomColor;
+            room.ccPendingWildPlayerId = undefined;
+            room.ccLastAction = Object.assign(Object.assign({}, room.ccLastAction), { color: randomColor });
+            room.ccCurrentPlayerId = this.getNextCCPlayer(room);
+            room.state = 'CC_PLAYING';
+            this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+            this.sendCCHands(room);
+            this.startCCTimer(room);
+            return;
+        }
+        if (room.state !== 'CC_PLAYING')
+            return;
+        // Player timed out - draw 2 penalty cards
+        const drawCount = Math.max((_a = room.ccDrawStack) !== null && _a !== void 0 ? _a : 0, 2);
+        this.drawCCCards(room, currentPlayer.id, drawCount);
+        room.ccDrawStack = 0;
+        room.ccLastAction = {
+            type: 'timeout',
+            playerId: currentPlayer.id,
+            playerName: currentPlayer.name
+        };
+        // Move to next player
+        room.ccCurrentPlayerId = this.getNextCCPlayer(room);
+        this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+        this.sendCCHands(room);
+        this.startCCTimer(room);
+    }
+    endCardCalamity(room, winnerId) {
+        var _a, _b, _c;
+        this.clearCCTimer(room.code);
+        room.state = 'CC_RESULTS';
+        room.ccWinnerId = winnerId;
+        // Calculate scores (cards left in hand = points for winner)
+        const scores = {};
+        for (const [playerId, hand] of Object.entries((_a = room.ccPlayerHands) !== null && _a !== void 0 ? _a : {})) {
+            let points = 0;
+            for (const card of hand) {
+                if (card.type === 'number') {
+                    points += (_b = card.value) !== null && _b !== void 0 ? _b : 0;
+                }
+                else if (card.type === 'skip' || card.type === 'reverse' || card.type === 'draw2') {
+                    points += 20;
+                }
+                else if (card.type === 'wild' || card.type === 'wild4') {
+                    points += 50;
+                }
+            }
+            scores[playerId] = points;
+        }
+        // Winner gets sum of all other players' points
+        const winnerScore = Object.entries(scores)
+            .filter(([id]) => id !== winnerId)
+            .reduce((sum, [, pts]) => sum + pts, 0);
+        room.players.forEach(p => {
+            var _a;
+            p.score = p.id === winnerId ? winnerScore : (_a = scores[p.id]) !== null && _a !== void 0 ? _a : 0;
+        });
+        this.io.to(room.code).emit('cc_game_end', {
+            winnerId,
+            winnerName: (_c = room.players.find(p => p.id === winnerId)) === null || _c === void 0 ? void 0 : _c.name,
+            scores
+        });
+        this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+        this.sendCCHands(room);
+    }
+    // ==================== END CARD CALAMITY METHODS ====================
     getRoomPublicState(room) {
-        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
+        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p;
         // Count how many players have answered the current AQ question
         const aqAnsweredCount = room.aqCurrentQuestion && room.aqAnswers
             ? Object.values(room.aqAnswers).filter(a => a[room.aqCurrentQuestion] !== undefined).length
@@ -1592,7 +2038,21 @@ class GameManager {
             scCorrectGuessers: room.scCorrectGuessers,
             scScores: room.scScores,
             scGuessChat: room.scGuessChat,
-            scDrawingStrokes: room.scDrawingStrokes
+            scDrawingStrokes: room.scDrawingStrokes,
+            // Card Calamity fields
+            ccCurrentPlayerId: room.ccCurrentPlayerId,
+            ccCurrentPlayerName: room.ccCurrentPlayerId ? (_l = room.players.find(p => p.id === room.ccCurrentPlayerId)) === null || _l === void 0 ? void 0 : _l.name : undefined,
+            ccDirection: room.ccDirection,
+            ccDrawStack: room.ccDrawStack,
+            ccActiveColor: room.ccActiveColor,
+            ccTopCard: ((_m = room.ccDiscardPile) === null || _m === void 0 ? void 0 : _m.length) ? room.ccDiscardPile[room.ccDiscardPile.length - 1] : undefined,
+            ccHandCounts: room.ccPlayerHands ? Object.fromEntries(Object.entries(room.ccPlayerHands).map(([id, cards]) => [id, cards.length])) : undefined,
+            ccTurnOrder: room.ccTurnOrder,
+            ccStackingEnabled: (_o = room.ccStackingEnabled) !== null && _o !== void 0 ? _o : false,
+            ccLastAction: room.ccLastAction,
+            ccWinnerId: room.ccWinnerId,
+            ccWinnerName: room.ccWinnerId ? (_p = room.players.find(p => p.id === room.ccWinnerId)) === null || _p === void 0 ? void 0 : _p.name : undefined,
+            ccPendingWildPlayerId: room.ccPendingWildPlayerId
         };
     }
     // Escape XML to safely embed text in generated SVG

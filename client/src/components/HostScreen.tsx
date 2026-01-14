@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { socket, socketServerUrl } from '../socket';
 import DrawingCanvas, { useStrokeReceiver } from './DrawingCanvas';
+import CardCalamityCard, { ActiveColorIndicator, DirectionIndicator } from './CardCalamityCard';
 
 interface Player {
   id: string;
@@ -27,6 +29,9 @@ type GameState =
   | 'SC_WORD_PICK'
   | 'SC_DRAWING'
   | 'SC_ROUND_RESULTS'
+  | 'CC_PLAYING'
+  | 'CC_PICK_COLOR'
+  | 'CC_RESULTS'
   | 'END';
 
 interface RoomState {
@@ -61,6 +66,20 @@ interface RoomState {
   scTotalRounds?: number;
   scCorrectGuessers?: string[];
   scScores?: Record<string, number>;
+  // Card Calamity fields
+  ccCurrentPlayerId?: string;
+  ccCurrentPlayerName?: string;
+  ccDirection?: 1 | -1;
+  ccDrawStack?: number;
+  ccActiveColor?: 'red' | 'blue' | 'green' | 'yellow';
+  ccTopCard?: { id: string; color: 'red' | 'blue' | 'green' | 'yellow' | null; type: string; value?: number };
+  ccHandCounts?: Record<string, number>;
+  ccTurnOrder?: string[];
+  ccStackingEnabled?: boolean;
+  ccLastAction?: { type: string; playerId: string; playerName: string; card?: any; color?: string };
+  ccWinnerId?: string;
+  ccWinnerName?: string;
+  ccPendingWildPlayerId?: string;
 }
 
 import WoodenButton from './WoodenButton';
@@ -93,6 +112,10 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
   const [scGuessChat, setScGuessChat] = useState<{ playerName: string; guess: string; isCorrect: boolean; isClose: boolean }[]>([]);
   const [scRoundWord, setScRoundWord] = useState<string>('');
   const [scRoundScores, setScRoundScores] = useState<Record<string, number>>({});
+  
+  // Card Calamity state
+  const [ccTimeLeft, setCcTimeLeft] = useState<number>(30);
+  const [ccLastPlayedCard, setCcLastPlayedCard] = useState<any>(null);
   
   // Initialize stroke receiver for SC
   const strokeReceiver = useStrokeReceiver();
@@ -271,6 +294,15 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
         setScRoundScores(data.finalScores);
     });
 
+    // Card Calamity events
+    socket.on('cc_timer', (data: { timeLeft: number }) => {
+        setCcTimeLeft(data.timeLeft);
+    });
+
+    socket.on('cc_game_end', () => {
+        // Game end handled via room_update
+    });
+
     socket.on('game_over', () => {
         // Handle game over if needed separately, or rely on room state 'END'
     });
@@ -337,6 +369,8 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
       socket.off('sc_clear_canvas');
       socket.off('sc_round_end');
       socket.off('sc_game_end');
+      socket.off('cc_timer');
+      socket.off('cc_game_end');
       socket.off('game_over');
       socket.off('error');
     };
@@ -375,10 +409,13 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
         ? 'Who Is The Most Autistic?'
         : (room.gameId ?? gameId) === 'scribble-scrabble'
           ? 'Scribble Scrabble'
-          : 'Nasty Libs'
+          : (room.gameId ?? gameId) === 'card-calamity'
+            ? 'Card Calamity'
+            : 'Nasty Libs'
     : '';
   const isPatented = room ? (room.gameId ?? gameId) === 'dubiously-patented' : false;
   const isScribble = room ? (room.gameId ?? gameId) === 'scribble-scrabble' : false;
+  const isCardCalamity = room ? (room.gameId ?? gameId) === 'card-calamity' : false;
   const isPromptPhase = room ? room.state === 'NL_ANSWER' : false;
   const isVotingPhase = room ? room.state === 'NL_VOTING' : false;
   const isResultsPhase = room ? room.state === 'NL_RESULTS' || room.state === 'DP_RESULTS' : false;
@@ -890,6 +927,189 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
                 </div>
                 
                 <p className="text-slate-400">Controller advances to {(room.scCurrentRound ?? 1) >= (room.scTotalRounds ?? 1) ? 'final results' : 'next round'}...</p>
+            </div>
+        )}
+
+        {/* Card Calamity - Playing */}
+        {(room.state === 'CC_PLAYING' || room.state === 'CC_PICK_COLOR') && (
+            <div className="w-full h-full flex flex-col p-4">
+                {/* Top bar: Timer and info */}
+                <div className="flex justify-between items-center mb-4">
+                    <div className="flex items-center gap-4">
+                        <DirectionIndicator direction={room.ccDirection ?? 1} />
+                        {room.ccActiveColor && <ActiveColorIndicator color={room.ccActiveColor} />}
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className={`text-5xl font-mono font-bold ${ccTimeLeft <= 10 ? 'text-red-500 animate-pulse' : 'text-white'}`}>
+                            {ccTimeLeft}s
+                        </div>
+                    </div>
+                    {room.ccDrawStack && room.ccDrawStack > 0 && (
+                        <div className="bg-red-600 px-4 py-2 rounded-xl text-white font-bold text-xl animate-bounce">
+                            +{room.ccDrawStack} STACK!
+                        </div>
+                    )}
+                </div>
+
+                {/* Main content: Discard pile and player ring */}
+                <div className="flex-1 flex items-center justify-center relative">
+                    {/* Player ring around discard */}
+                    <div className="absolute inset-0 flex items-center justify-center">
+                        {room.ccTurnOrder?.map((playerId, idx) => {
+                            const player = room.players.find(p => p.id === playerId);
+                            const isCurrent = playerId === room.ccCurrentPlayerId;
+                            const cardCount = room.ccHandCounts?.[playerId] ?? 0;
+                            const angle = (idx / (room.ccTurnOrder?.length ?? 1)) * 2 * Math.PI - Math.PI / 2;
+                            const radius = Math.min(300, window.innerWidth * 0.25);
+                            const x = Math.cos(angle) * radius;
+                            const y = Math.sin(angle) * radius;
+                            
+                            return (
+                                <motion.div
+                                    key={playerId}
+                                    className={`absolute flex flex-col items-center gap-1 p-3 rounded-xl transition-all ${
+                                        isCurrent 
+                                            ? 'bg-yellow-500/30 border-2 border-yellow-400 scale-110' 
+                                            : 'bg-slate-800/70'
+                                    }`}
+                                    style={{
+                                        transform: `translate(${x}px, ${y}px)`
+                                    }}
+                                    animate={isCurrent ? { scale: [1.1, 1.15, 1.1] } : {}}
+                                    transition={{ repeat: Infinity, duration: 1 }}
+                                >
+                                    <span className={`font-bold text-sm truncate max-w-24 ${isCurrent ? 'text-yellow-300' : 'text-white'}`}>
+                                        {player?.name ?? 'Unknown'}
+                                    </span>
+                                    <div className="flex items-center gap-1">
+                                        <span className="text-2xl">🃏</span>
+                                        <span className={`text-xl font-bold ${cardCount <= 2 ? 'text-red-400' : 'text-white'}`}>
+                                            {cardCount}
+                                        </span>
+                                    </div>
+                                    {isCurrent && room.state === 'CC_PICK_COLOR' && (
+                                        <span className="text-xs text-yellow-400 animate-pulse">Picking color...</span>
+                                    )}
+                                </motion.div>
+                            );
+                        })}
+                    </div>
+
+                    {/* Center: Discard pile */}
+                    <div className="relative z-10">
+                        <AnimatePresence mode="popLayout">
+                            {room.ccTopCard && (
+                                <motion.div
+                                    key={room.ccTopCard.id}
+                                    initial={{ scale: 0.5, rotate: -180, opacity: 0 }}
+                                    animate={{ scale: 1, rotate: 0, opacity: 1 }}
+                                    exit={{ scale: 0.8, opacity: 0 }}
+                                    transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                                >
+                                    <CardCalamityCard card={room.ccTopCard} />
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </div>
+                </div>
+
+                {/* Bottom: Last action */}
+                <AnimatePresence>
+                    {room.ccLastAction && (
+                        <motion.div
+                            initial={{ y: 50, opacity: 0 }}
+                            animate={{ y: 0, opacity: 1 }}
+                            exit={{ y: -50, opacity: 0 }}
+                            className="flex justify-center mb-4"
+                        >
+                            <div className={`px-6 py-3 rounded-xl text-xl font-bold ${
+                                room.ccLastAction.type === 'play' 
+                                    ? 'bg-green-600/80' 
+                                    : room.ccLastAction.type === 'draw'
+                                        ? 'bg-blue-600/80'
+                                        : 'bg-red-600/80'
+                            }`}>
+                                {room.ccLastAction.type === 'play' && (
+                                    <span>🎴 {room.ccLastAction.playerName} played a card!</span>
+                                )}
+                                {room.ccLastAction.type === 'draw' && (
+                                    <span>📥 {room.ccLastAction.playerName} drew cards!</span>
+                                )}
+                                {room.ccLastAction.type === 'timeout' && (
+                                    <span>⏱️ {room.ccLastAction.playerName} timed out! +2 cards</span>
+                                )}
+                                {room.ccLastAction.color && (
+                                    <span className="ml-2">→ {room.ccLastAction.color.toUpperCase()}</span>
+                                )}
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </div>
+        )}
+
+        {/* Card Calamity - Results */}
+        {room.state === 'CC_RESULTS' && (
+            <div className="w-full h-full flex flex-col items-center justify-center">
+                <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: 'spring', stiffness: 200 }}
+                >
+                    <h1 className="text-6xl font-black text-yellow-400 mb-2">🎉 WINNER! 🎉</h1>
+                </motion.div>
+                <motion.div
+                    initial={{ y: 50, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    transition={{ delay: 0.3 }}
+                    className="text-4xl font-bold text-white mb-8"
+                >
+                    {room.ccWinnerName}
+                </motion.div>
+                
+                <div className="bg-slate-800 rounded-xl p-6 w-full max-w-lg">
+                    <h3 className="text-xl font-bold text-slate-300 mb-4 text-center">Final Scores</h3>
+                    <div className="space-y-2">
+                        {room.players
+                            .sort((a, b) => {
+                                if (a.id === room.ccWinnerId) return -1;
+                                if (b.id === room.ccWinnerId) return 1;
+                                return b.score - a.score;
+                            })
+                            .map((player, idx) => (
+                                <motion.div
+                                    key={player.id}
+                                    initial={{ x: -50, opacity: 0 }}
+                                    animate={{ x: 0, opacity: 1 }}
+                                    transition={{ delay: 0.4 + idx * 0.1 }}
+                                    className={`flex justify-between items-center p-3 rounded-lg ${
+                                        player.id === room.ccWinnerId 
+                                            ? 'bg-yellow-900/50 border-2 border-yellow-500' 
+                                            : 'bg-slate-900'
+                                    }`}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-xl font-bold w-8">
+                                            {player.id === room.ccWinnerId ? '👑' : `#${idx + 1}`}
+                                        </span>
+                                        <span className="text-lg">{player.name}</span>
+                                        {player.id === room.ccWinnerId && (
+                                            <span className="text-xs bg-yellow-600 px-2 py-1 rounded">WINNER</span>
+                                        )}
+                                    </div>
+                                    <span className="text-xl font-bold text-green-400">{player.score} pts</span>
+                                </motion.div>
+                            ))}
+                    </div>
+                </div>
+                
+                <WoodenButton 
+                    variant="red"
+                    onClick={handleBack}
+                    className="mt-8"
+                >
+                    BACK TO MENU
+                </WoodenButton>
             </div>
         )}
 
