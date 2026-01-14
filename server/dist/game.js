@@ -14,15 +14,37 @@ const uuid_1 = require("uuid");
 const nastyPrompts_1 = require("./nastyPrompts");
 const autismQuiz_1 = require("./autismQuiz");
 const scribbleWords_1 = require("./scribbleWords");
+const sssPrompts_1 = require("./sssPrompts");
 class GameManager {
     constructor(io) {
+        var _a, _b;
         this.rooms = new Map();
         this.socketRoomMap = new Map(); // socketId -> roomCode
         this.botRun = new Map();
         this.aqTimers = new Map(); // roomCode -> timer
         this.scTimers = new Map(); // roomCode -> timer (Scribble Scrabble)
+        this.sssTimers = new Map(); // roomCode -> timer (Scribble Scrabble: Scrambled)
         this.ccTimers = new Map(); // roomCode -> timer (Card Calamity)
+        this.recentlyClosed = new Map(); // roomCode -> timeout that prevents immediate reuse
+        this.hostDisconnectTimers = new Map(); // roomCode -> timeout for auto-close on host disconnect
+        this.ROOM_REUSE_DELAY_MS = 5000;
+        this.HOST_DISCONNECT_TIMEOUT_MS = 0; // 0 = disabled
         this.io = io;
+        // Allow overrides via environment
+        try {
+            this.ROOM_REUSE_DELAY_MS = Number((_a = process.env.ROOM_REUSE_DELAY_MS) !== null && _a !== void 0 ? _a : String(this.ROOM_REUSE_DELAY_MS));
+        }
+        catch (_) { }
+        try {
+            // Accept either milliseconds or seconds via HOST_DISCONNECT_TIMEOUT (seconds)
+            const raw = (_b = process.env.HOST_DISCONNECT_TIMEOUT_MS) !== null && _b !== void 0 ? _b : process.env.HOST_DISCONNECT_TIMEOUT;
+            if (raw) {
+                const asNum = Number(raw);
+                // If value looks small (< 1000) assume seconds
+                this.HOST_DISCONNECT_TIMEOUT_MS = asNum > 1000 ? asNum : asNum * 1000;
+            }
+        }
+        catch (_) { }
     }
     startAQTimer(room) {
         var _a;
@@ -192,6 +214,15 @@ class GameManager {
             }
             room.hostSocketId = socket.id;
             room.hostConnected = true;
+            // Clear any pending host-disconnect auto-close timer
+            try {
+                const pending = this.hostDisconnectTimers.get(room.code);
+                if (pending) {
+                    clearTimeout(pending);
+                    this.hostDisconnectTimers.delete(room.code);
+                }
+            }
+            catch (_) { }
             socket.emit('host_joined', { roomCode: room.code, gameId: room.gameId });
         }
         else {
@@ -281,12 +312,80 @@ class GameManager {
             return;
         if (room.hostSocketId !== socket.id)
             return;
-        this.io.to(roomCode).emit('room_closed');
-        this.rooms.delete(roomCode);
-        for (const [socketId, code] of this.socketRoomMap.entries()) {
-            if (code === roomCode)
-                this.socketRoomMap.delete(socketId);
+        // Use centralized close logic to ensure thorough cleanup
+        this.closeRoom(roomCode, { initiatedBy: 'host', initiatorSocketId: socket.id });
+    }
+    closeRoom(roomCode, opts) {
+        const room = this.rooms.get(roomCode);
+        if (!room)
+            return;
+        // 1) Clear all timers for this room
+        try {
+            this.clearAQTimer(roomCode);
         }
+        catch (_) { }
+        try {
+            this.clearSCTimer(roomCode);
+        }
+        catch (_) { }
+        try {
+            this.clearSSSTimer(roomCode);
+        }
+        catch (_) { }
+        try {
+            this.clearCCTimer(roomCode);
+        }
+        catch (_) { }
+        // Ensure any bot run state cleared
+        try {
+            this.botRun.delete(roomCode);
+        }
+        catch (_) { }
+        // 2) Emit a payloaded room_closed event for clients
+        try {
+            this.io.to(roomCode).emit('room_closed', { roomCode });
+        }
+        catch (_) { }
+        // 3) Force member sockets to leave and clear socketRoomMap entries
+        for (const [socketId, code] of Array.from(this.socketRoomMap.entries())) {
+            if (code === roomCode) {
+                const s = this.io.sockets.sockets.get(socketId);
+                if (s) {
+                    try {
+                        s.leave(roomCode);
+                    }
+                    catch (_) { }
+                    try {
+                        s.emit('room_closed', { roomCode });
+                    }
+                    catch (_) { }
+                }
+                this.socketRoomMap.delete(socketId);
+            }
+        }
+        // 4) Delete the room
+        this.rooms.delete(roomCode);
+        // 5) Prevent immediate reuse by marking recently closed and scheduling deletion
+        try {
+            const existing = this.recentlyClosed.get(roomCode);
+            if (existing) {
+                clearTimeout(existing);
+            }
+            const t = setTimeout(() => {
+                this.recentlyClosed.delete(roomCode);
+            }, this.ROOM_REUSE_DELAY_MS);
+            this.recentlyClosed.set(roomCode, t);
+        }
+        catch (_) { }
+        // 6) Clear any host-disconnect timer for this room
+        try {
+            const h = this.hostDisconnectTimers.get(roomCode);
+            if (h) {
+                clearTimeout(h);
+                this.hostDisconnectTimers.delete(roomCode);
+            }
+        }
+        catch (_) { }
     }
     handleGameAction(socket, data) {
         const roomCode = this.socketRoomMap.get(socket.id);
@@ -378,6 +477,25 @@ class GameManager {
             case 'CC_PICK_COLOR':
                 this.handleCCPickColor(room, socket.id, data.color);
                 break;
+            // Scribble Scrabble: Scrambled actions
+            case 'SSS_SET_DRAW_TIME':
+                if (this.isControllerSocket(room, socket.id) && room.state === 'LOBBY') {
+                    room.sssDrawTime = data.time === 90 ? 90 : 60;
+                    this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+                }
+                break;
+            case 'SSS_SET_DOUBLE_ROUNDS':
+                if (this.isControllerSocket(room, socket.id) && room.state === 'LOBBY') {
+                    room.sssDoubleRounds = !!data.enabled;
+                    this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+                }
+                break;
+            case 'SSS_SUBMIT_DRAWING':
+                this.handleSSSSubmitDrawing(room, socket.id, data.drawing);
+                break;
+            case 'SSS_VOTE':
+                this.handleSSSVote(room, socket.id, data.votedForPlayerId);
+                break;
             case 'NEXT_ROUND':
                 if (this.isControllerSocket(room, socket.id)) {
                     this.nextRound(room);
@@ -406,7 +524,23 @@ class GameManager {
                     // Host disconnected
                     console.log('Host disconnected from room ' + roomCode);
                     room.hostConnected = false;
-                    // Optionally close room or wait for reconnect
+                    // Optionally schedule auto-close of orphaned room
+                    if (this.HOST_DISCONNECT_TIMEOUT_MS && this.HOST_DISCONNECT_TIMEOUT_MS > 0) {
+                        try {
+                            const existing = this.hostDisconnectTimers.get(roomCode);
+                            if (existing) {
+                                clearTimeout(existing);
+                            }
+                            const t = setTimeout(() => {
+                                const latest = this.rooms.get(roomCode);
+                                if (latest && !latest.hostConnected) {
+                                    this.closeRoom(roomCode, { initiatedBy: 'host-disconnect-timeout' });
+                                }
+                            }, this.HOST_DISCONNECT_TIMEOUT_MS);
+                            this.hostDisconnectTimers.set(roomCode, t);
+                        }
+                        catch (_) { }
+                    }
                 }
                 else {
                     const player = room.players.find(p => p.socketId === socket.id);
@@ -442,6 +576,14 @@ class GameManager {
             const controller = room.players.find(p => p.id === room.controllerPlayerId);
             if (controller) {
                 this.io.to(controller.socketId).emit('error_message', { message: 'Scribble Scrabble does not support bots — humans only!' });
+            }
+            return;
+        }
+        // Scribble Scrabble: Scrambled doesn't support bots
+        if (room.gameId === 'scribble-scrabble-scrambled') {
+            const controller = room.players.find(p => p.id === room.controllerPlayerId);
+            if (controller) {
+                this.io.to(controller.socketId).emit('error_message', { message: 'Scribble Scrabble: Scrambled does not support bots — humans only!' });
             }
             return;
         }
@@ -851,25 +993,45 @@ class GameManager {
         this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
     }
     createNewLobby(room, socket) {
-        // Clear timers before closing
+        var _a;
+        // Clear all timers before closing
         this.clearAQTimer(room.code);
         this.clearSCTimer(room.code);
+        this.clearSSSTimer(room.code);
         this.clearCCTimer(room.code);
-        // Notify all players that the lobby is being closed
-        this.io.to(room.code).emit('lobby_closed');
-        // Remove all players from the room
+        // Notify players that the lobby is closed
+        this.io.to(room.code).emit('lobby_closed', { roomCode: room.code });
+        // Make sure any mapped sockets leave and remove mappings
         for (const player of room.players) {
             if (player.socketId) {
+                const s = this.io.sockets.sockets.get(player.socketId);
+                if (s) {
+                    try {
+                        s.leave(room.code);
+                    }
+                    catch (_) { }
+                    try {
+                        s.emit('lobby_closed', { roomCode: room.code });
+                    }
+                    catch (_) { }
+                }
                 this.socketRoomMap.delete(player.socketId);
             }
         }
-        // Delete the old room
-        this.rooms.delete(room.code);
-        // Create a new room with a new code
-        const newCode = this.generateRoomCode();
+        // Also clean any stray mappings that reference the old code
+        for (const [socketId, code] of Array.from(this.socketRoomMap.entries())) {
+            if (code === room.code)
+                this.socketRoomMap.delete(socketId);
+        }
+        const oldCode = room.code;
+        const preservedGameId = (_a = room.gameId) !== null && _a !== void 0 ? _a : 'nasty-libs';
+        // Delete old room
+        this.rooms.delete(oldCode);
+        // Create a new room with a new unique code and preserved gameId
+        const newCode = this.generateUniqueRoomCode();
         const newRoom = {
             code: newCode,
-            gameId: 'nasty-libs',
+            gameId: preservedGameId,
             hostSocketId: room.hostSocketId,
             hostKey: room.hostKey,
             hostConnected: room.hostConnected,
@@ -883,15 +1045,31 @@ class GameManager {
             createdAt: Date.now(),
         };
         this.rooms.set(newCode, newRoom);
-        // Notify the host of the new room
+        // Move host socket into new room and notify host
         if (room.hostSocketId) {
             const hostSocket = this.io.sockets.sockets.get(room.hostSocketId);
             if (hostSocket) {
-                hostSocket.leave(room.code);
-                hostSocket.join(newCode);
-                hostSocket.emit('new_lobby_created', { code: newCode });
+                try {
+                    hostSocket.leave(oldCode);
+                }
+                catch (_) { }
+                try {
+                    hostSocket.join(newCode);
+                }
+                catch (_) { }
+                this.socketRoomMap.set(hostSocket.id, newCode);
+                hostSocket.emit('new_lobby_created', { oldCode, newCode, gameId: preservedGameId });
             }
         }
+        // Prevent immediate reuse of the old code
+        try {
+            const existing = this.recentlyClosed.get(oldCode);
+            if (existing)
+                clearTimeout(existing);
+            const t = setTimeout(() => this.recentlyClosed.delete(oldCode), this.ROOM_REUSE_DELAY_MS);
+            this.recentlyClosed.set(oldCode, t);
+        }
+        catch (_) { }
     }
     startGame(room) {
         const activePlayers = this.getActivePlayers(room);
@@ -936,6 +1114,10 @@ class GameManager {
         }
         if (room.gameId === 'card-calamity') {
             this.startCardCalamity(room);
+            return;
+        }
+        if (room.gameId === 'scribble-scrabble-scrambled') {
+            this.startScribbleScrabbleScrambled(room);
             return;
         }
         // Initialize money for Dubiously Patented
@@ -1401,6 +1583,12 @@ class GameManager {
             this.advanceSCRound(room);
             return;
         }
+        if (room.gameId === 'scribble-scrabble-scrambled') {
+            if (room.state !== 'SSS_RESULTS')
+                return;
+            this.advanceSSSRound(room);
+            return;
+        }
         if (room.state !== 'DP_RESULTS')
             return;
         this.endGame(room);
@@ -1423,11 +1611,18 @@ class GameManager {
         return result;
     }
     generateUniqueRoomCode() {
-        for (let attempt = 0; attempt < 20; attempt++) {
+        for (let attempt = 0; attempt < 50; attempt++) {
             const code = this.generateRoomCode();
-            if (!this.rooms.has(code))
+            if (!this.rooms.has(code) && !this.recentlyClosed.has(code))
                 return code;
         }
+        // Fallback: use UUID-derived code (still check recentlyClosed)
+        for (let attempt = 0; attempt < 10; attempt++) {
+            const code = (0, uuid_1.v4)().slice(0, 4).toUpperCase();
+            if (!this.rooms.has(code) && !this.recentlyClosed.has(code))
+                return code;
+        }
+        // Last resort, return any non-existing or just random
         return (0, uuid_1.v4)().slice(0, 4).toUpperCase();
     }
     // ==================== SCRIBBLE SCRABBLE METHODS ====================
@@ -2117,8 +2312,277 @@ class GameManager {
         this.sendCCHands(room);
     }
     // ==================== END CARD CALAMITY METHODS ====================
+    // ==================== SCRIBBLE SCRABBLE: SCRAMBLED METHODS ====================
+    startScribbleScrabbleScrambled(room) {
+        var _a;
+        const activePlayers = this.getActivePlayers(room);
+        // Minimum 3 players required
+        if (activePlayers.length < 3) {
+            const controller = room.players.find(p => p.id === room.controllerPlayerId);
+            if (controller) {
+                this.io.to(controller.socketId).emit('error_message', {
+                    message: 'Scribble Scrabble: Scrambled requires at least 3 players!'
+                });
+            }
+            return;
+        }
+        // Initialize game state
+        room.sssScores = {};
+        for (const p of activePlayers) {
+            room.sssScores[p.id] = 0;
+        }
+        // Shuffle player order for fair rotation of who gets real prompt
+        room.sssRealDrawerOrder = [...activePlayers.map(p => p.id)].sort(() => Math.random() - 0.5);
+        // If double rounds, duplicate the order
+        if (room.sssDoubleRounds) {
+            room.sssRealDrawerOrder = [...room.sssRealDrawerOrder, ...room.sssRealDrawerOrder.sort(() => Math.random() - 0.5)];
+        }
+        room.totalRounds = room.sssRealDrawerOrder.length;
+        room.sssRound = 0;
+        room.sssUsedTemplateIndices = [];
+        room.sssDrawTime = (_a = room.sssDrawTime) !== null && _a !== void 0 ? _a : 60;
+        this.io.to(room.code).emit('game_started');
+        // Start first round
+        this.startSSSRound(room);
+    }
+    startSSSRound(room) {
+        var _a, _b, _c;
+        const activePlayers = this.getActivePlayers(room);
+        room.sssRound = ((_a = room.sssRound) !== null && _a !== void 0 ? _a : 0) + 1;
+        room.currentRound = room.sssRound;
+        // Get the real drawer for this round
+        const realDrawerIndex = (room.sssRound - 1) % room.sssRealDrawerOrder.length;
+        room.sssRealDrawerId = room.sssRealDrawerOrder[realDrawerIndex];
+        // Track active players for this round (late-joiners spectate)
+        room.sssActivePlayerIds = activePlayers.map(p => p.id);
+        // Generate prompts, avoiding used templates
+        const usedIndices = new Set((_b = room.sssUsedTemplateIndices) !== null && _b !== void 0 ? _b : []);
+        const templateIndex = (0, sssPrompts_1.getUnusedTemplateIndex)(usedIndices);
+        room.sssUsedTemplateIndices = [...((_c = room.sssUsedTemplateIndices) !== null && _c !== void 0 ? _c : []), templateIndex];
+        const promptSet = (0, sssPrompts_1.generatePromptSetFromTemplate)(templateIndex, activePlayers.length);
+        room.sssRealPrompt = promptSet.realPrompt;
+        // Assign prompts to players
+        room.sssAllPrompts = {};
+        const shuffledVariants = [...promptSet.variants].sort(() => Math.random() - 0.5);
+        let variantIndex = 0;
+        for (const player of activePlayers) {
+            if (player.id === room.sssRealDrawerId) {
+                room.sssAllPrompts[player.id] = promptSet.realPrompt;
+            }
+            else {
+                room.sssAllPrompts[player.id] = shuffledVariants[variantIndex];
+                variantIndex++;
+            }
+        }
+        // Clear drawings and votes
+        room.sssDrawings = {};
+        room.sssVotes = {};
+        room.sssRoundScores = {};
+        room.state = 'SSS_DRAWING';
+        this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+        // Send private prompts to each player
+        for (const player of activePlayers) {
+            const prompt = room.sssAllPrompts[player.id];
+            const isReal = player.id === room.sssRealDrawerId;
+            this.io.to(player.socketId).emit('sss_prompt', { prompt, isReal });
+        }
+        // Start drawing timer
+        this.startSSSTimer(room);
+    }
+    startSSSTimer(room) {
+        var _a, _b;
+        this.clearSSSTimer(room.code);
+        const duration = ((_a = room.sssDrawTime) !== null && _a !== void 0 ? _a : 60) * 1000;
+        const startTime = Date.now();
+        // Emit timer start
+        this.io.to(room.code).emit('sss_timer', { timeLeft: (_b = room.sssDrawTime) !== null && _b !== void 0 ? _b : 60 });
+        // Countdown every second
+        const countdownInterval = setInterval(() => {
+            const elapsed = Date.now() - startTime;
+            const remaining = Math.max(0, Math.ceil((duration - elapsed) / 1000));
+            this.io.to(room.code).emit('sss_timer', { timeLeft: remaining });
+        }, 1000);
+        // Main timer
+        const timer = setTimeout(() => {
+            clearInterval(countdownInterval);
+            this.handleSSSDrawingTimeout(room.code);
+        }, duration);
+        this.sssTimers.set(room.code, timer);
+        this.sssTimers.set(`${room.code}_interval`, countdownInterval);
+    }
+    clearSSSTimer(roomCode) {
+        const timer = this.sssTimers.get(roomCode);
+        if (timer) {
+            clearTimeout(timer);
+            this.sssTimers.delete(roomCode);
+        }
+        const interval = this.sssTimers.get(`${roomCode}_interval`);
+        if (interval) {
+            clearInterval(interval);
+            this.sssTimers.delete(`${roomCode}_interval`);
+        }
+    }
+    handleSSSDrawingTimeout(roomCode) {
+        var _a, _b, _c;
+        const room = this.rooms.get(roomCode);
+        if (!room || room.state !== 'SSS_DRAWING')
+            return;
+        // Auto-submit empty drawings for players who didn't submit
+        const activePlayers = (_a = room.sssActivePlayerIds) !== null && _a !== void 0 ? _a : [];
+        for (const playerId of activePlayers) {
+            if (!((_b = room.sssDrawings) === null || _b === void 0 ? void 0 : _b[playerId])) {
+                room.sssDrawings = (_c = room.sssDrawings) !== null && _c !== void 0 ? _c : {};
+                room.sssDrawings[playerId] = ''; // Empty drawing
+            }
+        }
+        // Move to voting
+        this.advanceToSSSVoting(room);
+    }
+    handleSSSSubmitDrawing(room, socketId, drawing) {
+        var _a, _b, _c, _d, _e;
+        if (room.gameId !== 'scribble-scrabble-scrambled')
+            return;
+        if (room.state !== 'SSS_DRAWING')
+            return;
+        const player = room.players.find(p => p.socketId === socketId);
+        if (!player)
+            return;
+        // Only active players can submit
+        if (!((_a = room.sssActivePlayerIds) === null || _a === void 0 ? void 0 : _a.includes(player.id)))
+            return;
+        // Already submitted
+        if ((_b = room.sssDrawings) === null || _b === void 0 ? void 0 : _b[player.id])
+            return;
+        room.sssDrawings = (_c = room.sssDrawings) !== null && _c !== void 0 ? _c : {};
+        room.sssDrawings[player.id] = drawing;
+        this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+        // Check if all players have submitted
+        const activeCount = (_e = (_d = room.sssActivePlayerIds) === null || _d === void 0 ? void 0 : _d.length) !== null && _e !== void 0 ? _e : 0;
+        const submittedCount = Object.keys(room.sssDrawings).length;
+        if (submittedCount >= activeCount) {
+            this.clearSSSTimer(room.code);
+            this.advanceToSSSVoting(room);
+        }
+    }
+    advanceToSSSVoting(room) {
+        room.state = 'SSS_VOTING';
+        room.sssVotes = {};
+        this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+    }
+    handleSSSVote(room, socketId, votedForPlayerId) {
+        var _a, _b, _c, _d, _e, _f;
+        if (room.gameId !== 'scribble-scrabble-scrambled')
+            return;
+        if (room.state !== 'SSS_VOTING')
+            return;
+        const player = room.players.find(p => p.socketId === socketId);
+        if (!player)
+            return;
+        // Only active players can vote
+        if (!((_a = room.sssActivePlayerIds) === null || _a === void 0 ? void 0 : _a.includes(player.id)))
+            return;
+        // Can't vote for yourself
+        if (votedForPlayerId === player.id)
+            return;
+        // Can't vote for someone not playing
+        if (!((_b = room.sssActivePlayerIds) === null || _b === void 0 ? void 0 : _b.includes(votedForPlayerId)))
+            return;
+        // Already voted
+        if ((_c = room.sssVotes) === null || _c === void 0 ? void 0 : _c[player.id])
+            return;
+        room.sssVotes = (_d = room.sssVotes) !== null && _d !== void 0 ? _d : {};
+        room.sssVotes[player.id] = votedForPlayerId;
+        this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+        // Check if all players have voted (everyone except the real drawer can vote)
+        const voterCount = ((_f = (_e = room.sssActivePlayerIds) === null || _e === void 0 ? void 0 : _e.length) !== null && _f !== void 0 ? _f : 0);
+        const votedCount = Object.keys(room.sssVotes).length;
+        // Everyone votes (including real drawer to throw others off)
+        if (votedCount >= voterCount) {
+            this.calculateSSSScores(room);
+        }
+    }
+    calculateSSSScores(room) {
+        var _a, _b, _c, _d, _e, _f;
+        const realDrawerId = room.sssRealDrawerId;
+        const votes = (_a = room.sssVotes) !== null && _a !== void 0 ? _a : {};
+        // Calculate how many people voted for each player
+        const votesByTarget = {};
+        for (const [voterId, targetId] of Object.entries(votes)) {
+            if (!votesByTarget[targetId]) {
+                votesByTarget[targetId] = [];
+            }
+            votesByTarget[targetId].push(voterId);
+        }
+        // Count how many people the real drawer tricked (voted for them = wrong)
+        // Actually, people who voted for the REAL drawer guessed correctly
+        // People who voted for someone ELSE got tricked by that person
+        room.sssRoundScores = {};
+        room.sssScores = (_b = room.sssScores) !== null && _b !== void 0 ? _b : {};
+        for (const playerId of (_c = room.sssActivePlayerIds) !== null && _c !== void 0 ? _c : []) {
+            room.sssRoundScores[playerId] = { tricked: 0, correct: false };
+        }
+        // Award points
+        for (const [voterId, targetId] of Object.entries(votes)) {
+            if (targetId === realDrawerId) {
+                // Correct guess! +2 points
+                room.sssScores[voterId] = ((_d = room.sssScores[voterId]) !== null && _d !== void 0 ? _d : 0) + 2;
+                room.sssRoundScores[voterId].correct = true;
+            }
+            else {
+                // Wrong guess - the person they voted for tricked them (+1 for that person)
+                room.sssScores[targetId] = ((_e = room.sssScores[targetId]) !== null && _e !== void 0 ? _e : 0) + 1;
+                room.sssRoundScores[targetId].tricked += 1;
+            }
+        }
+        // Update player scores in the player list
+        for (const player of room.players) {
+            player.score = (_f = room.sssScores[player.id]) !== null && _f !== void 0 ? _f : 0;
+        }
+        room.state = 'SSS_RESULTS';
+        this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+        // Send detailed results
+        this.io.to(room.code).emit('sss_results', {
+            realDrawerId,
+            realPrompt: room.sssRealPrompt,
+            allPrompts: room.sssAllPrompts,
+            drawings: room.sssDrawings,
+            votes: room.sssVotes,
+            roundScores: room.sssRoundScores,
+            totalScores: room.sssScores,
+            votesByTarget
+        });
+    }
+    advanceSSSRound(room) {
+        var _a;
+        const currentRound = (_a = room.sssRound) !== null && _a !== void 0 ? _a : 0;
+        const totalRounds = room.totalRounds;
+        if (currentRound >= totalRounds) {
+            // Game over
+            this.endScribbleScrabbleScrambled(room);
+        }
+        else {
+            // Next round
+            this.startSSSRound(room);
+        }
+    }
+    endScribbleScrabbleScrambled(room) {
+        var _a, _b, _c;
+        room.state = 'END';
+        // Find winner(s)
+        const scores = (_a = room.sssScores) !== null && _a !== void 0 ? _a : {};
+        const maxScore = Math.max(...Object.values(scores));
+        const winners = room.players.filter(p => scores[p.id] === maxScore);
+        this.io.to(room.code).emit('sss_game_end', {
+            scores,
+            winnerId: (_b = winners[0]) === null || _b === void 0 ? void 0 : _b.id,
+            winnerName: (_c = winners[0]) === null || _c === void 0 ? void 0 : _c.name,
+            winners: winners.map(w => ({ id: w.id, name: w.name, score: scores[w.id] }))
+        });
+        this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+    }
+    // ==================== END SCRIBBLE SCRABBLE: SCRAMBLED METHODS ====================
     getRoomPublicState(room) {
-        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p;
+        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t;
         // Count how many players have answered the current AQ question
         const aqAnsweredCount = room.aqCurrentQuestion && room.aqAnswers
             ? Object.values(room.aqAnswers).filter(a => a[room.aqCurrentQuestion] !== undefined).length
@@ -2178,7 +2642,21 @@ class GameManager {
             ccLastAction: room.ccLastAction,
             ccWinnerId: room.ccWinnerId,
             ccWinnerName: room.ccWinnerId ? (_p = room.players.find(p => p.id === room.ccWinnerId)) === null || _p === void 0 ? void 0 : _p.name : undefined,
-            ccPendingWildPlayerId: room.ccPendingWildPlayerId
+            ccPendingWildPlayerId: room.ccPendingWildPlayerId,
+            // Scribble Scrabble: Scrambled fields
+            sssRound: room.sssRound,
+            sssDrawTime: (_q = room.sssDrawTime) !== null && _q !== void 0 ? _q : 60,
+            sssDoubleRounds: (_r = room.sssDoubleRounds) !== null && _r !== void 0 ? _r : false,
+            sssDrawingsSubmitted: room.sssDrawings ? Object.keys(room.sssDrawings).length : 0,
+            sssVotesSubmitted: room.sssVotes ? Object.keys(room.sssVotes).length : 0,
+            sssActivePlayerCount: (_t = (_s = room.sssActivePlayerIds) === null || _s === void 0 ? void 0 : _s.length) !== null && _t !== void 0 ? _t : 0,
+            sssScores: room.sssScores,
+            sssDrawings: room.sssDrawings, // Send drawings for voting/results
+            sssRealDrawerId: room.state === 'SSS_RESULTS' ? room.sssRealDrawerId : undefined, // Only reveal after voting
+            sssRealPrompt: room.state === 'SSS_RESULTS' ? room.sssRealPrompt : undefined,
+            sssAllPrompts: room.state === 'SSS_RESULTS' ? room.sssAllPrompts : undefined,
+            sssVotes: room.state === 'SSS_RESULTS' ? room.sssVotes : undefined,
+            sssRoundScores: room.sssRoundScores
         };
     }
     // Escape XML to safely embed text in generated SVG
