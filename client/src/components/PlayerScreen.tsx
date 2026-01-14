@@ -1334,9 +1334,9 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
 
         {/* Card Calamity - Playing */}
         {(gameState === 'CC_PLAYING' || gameState === 'CC_PICK_COLOR') && (
-          <div className="w-full flex flex-col h-full max-h-full">
+          <div className="w-full flex flex-col">
             {/* Top info bar */}
-            <div className="flex justify-between items-center mb-4 px-2">
+            <div className="flex justify-between items-center mb-2 px-2">
               <div className="flex items-center gap-2">
                 {room?.ccActiveColor && <ActiveColorIndicator color={room.ccActiveColor} />}
               </div>
@@ -1388,13 +1388,13 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
             )}
 
             {/* Hand display */}
-            <div className="flex-1 overflow-hidden flex flex-col">
+            <div className="mt-4">
               <div className="text-sm text-slate-400 text-center mb-2">
                 Your hand ({ccHand.length} cards)
               </div>
               
-              <div className="flex-1 overflow-x-auto overflow-y-hidden pb-4">
-                <div className="flex gap-2 px-4 min-w-min">
+              <div className="overflow-x-auto pb-4">
+                <div className="flex gap-3 px-4 min-w-min justify-center flex-wrap">
                   <AnimatePresence mode="popLayout">
                     {ccHand.map((card) => {
                       const isMyTurn = room?.ccCurrentPlayerId === playerId && gameState === 'CC_PLAYING';

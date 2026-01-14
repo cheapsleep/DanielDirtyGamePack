@@ -16,6 +16,7 @@ interface CardCalamityCardProps {
   disabled?: boolean;
   selected?: boolean;
   small?: boolean;
+  large?: boolean;
   faceDown?: boolean;
   className?: string;
 }
@@ -68,18 +69,21 @@ export default function CardCalamityCard({
   disabled = false,
   selected = false,
   small = false,
+  large = false,
   faceDown = false,
   className = ''
 }: CardCalamityCardProps) {
   const content = getCardContent(card);
   const isWild = card.type === 'wild' || card.type === 'wild4';
   
-  const sizeClasses = small 
-    ? 'w-12 h-18 text-xs' 
-    : 'w-20 h-28 sm:w-24 sm:h-36';
+  const sizeClasses = large
+    ? 'w-40 h-56 sm:w-48 sm:h-64'
+    : small 
+      ? 'w-16 h-24' 
+      : 'w-28 h-40 sm:w-32 sm:h-44';
   
-  const cornerSize = small ? 'text-[8px]' : 'text-xs sm:text-sm';
-  const centerSize = small ? 'text-lg' : 'text-3xl sm:text-4xl';
+  const cornerSize = large ? 'text-base sm:text-lg' : small ? 'text-[10px]' : 'text-sm sm:text-base';
+  const centerSize = large ? 'text-6xl sm:text-7xl' : small ? 'text-2xl' : 'text-4xl sm:text-5xl';
   
   if (faceDown) {
     return (

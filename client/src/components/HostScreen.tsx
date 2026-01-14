@@ -1003,7 +1003,7 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
                                     exit={{ scale: 0.8, opacity: 0 }}
                                     transition={{ type: 'spring', stiffness: 300, damping: 20 }}
                                 >
-                                    <CardCalamityCard card={room.ccTopCard} />
+                                    <CardCalamityCard card={room.ccTopCard} large />
                                 </motion.div>
                             )}
                         </AnimatePresence>
