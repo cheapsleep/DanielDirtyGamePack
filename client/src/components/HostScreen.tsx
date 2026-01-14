@@ -427,9 +427,7 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
         };
 
         const onNewLobbyCreated = (data: any) => {
-            const oldCode = String(data?.oldCode ?? '');
             const newCode = String(data?.newCode ?? '');
-            const newGameId = String(data?.gameId ?? gameId);
             // If this host is being moved to a new lobby, update sessionStorage and wait for room_update
             try {
                 const savedHost = JSON.parse(sessionStorage.getItem(storageKey) ?? 'null');

@@ -454,7 +454,7 @@ export default function PlayerScreen() {
       setJoined(false);
     });
 
-    const onRoomClosed = (data?: any) => {
+    const onRoomClosed = () => {
       setError('Room closed');
       setJoined(false);
       setRoom(null);
@@ -468,7 +468,7 @@ export default function PlayerScreen() {
       }
     };
 
-    const onLobbyClosed = (data?: any) => {
+    const onLobbyClosed = () => {
       // Controller created a new lobby, kick players back to join screen
       setError('Lobby closed by controller');
       setJoined(false);
