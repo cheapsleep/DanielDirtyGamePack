@@ -49,6 +49,7 @@ export default function WoodenButton({ variant = 'wood', children, className, ty
         flex items-center justify-center 
         rounded-xl border-b-4 border-r-4 ${borderClass}
         ${bgClass} ${textClass} ${shadowClass}
+        touch-manipulation cursor-pointer select-none
         ${className}
       `}
       style={woodGrain}

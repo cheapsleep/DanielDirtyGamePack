@@ -519,8 +519,8 @@ export default function PlayerScreen() {
 
   if (!joined) {
     return (
-      <div className="w-full max-w-md p-8">
-        <form onSubmit={handleJoin} className="flex flex-col gap-6">
+      <div className="w-full max-w-md p-8 flex flex-col items-center justify-center min-h-screen">
+        <form onSubmit={handleJoin} className="flex flex-col gap-6 w-full">
           <div>
             <label className="block text-sm font-bold mb-2 text-slate-400">ROOM CODE</label>
             <input 
@@ -530,6 +530,9 @@ export default function PlayerScreen() {
               onChange={e => setRoomCode(e.target.value.toUpperCase())}
               className="w-full p-4 bg-slate-800 rounded-lg text-4xl font-black text-center tracking-widest uppercase focus:ring-2 focus:ring-pink-500 outline-none"
               placeholder="ABCD"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="characters"
             />
           </div>
           <div>
@@ -541,13 +544,15 @@ export default function PlayerScreen() {
               onChange={e => setPlayerName(e.target.value)}
               className="w-full p-4 bg-slate-800 rounded-lg text-2xl font-bold text-center focus:ring-2 focus:ring-blue-500 outline-none"
               placeholder="ENTER NAME"
+              autoComplete="off"
+              autoCorrect="off"
             />
           </div>
           {error && <p className="text-red-500 text-center">{error}</p>}
           <WoodenButton 
             type="submit"
             variant="red"
-            className="w-full"
+            className="w-full touch-manipulation"
           >
             PLAY
           </WoodenButton>
