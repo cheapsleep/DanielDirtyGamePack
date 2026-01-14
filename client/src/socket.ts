@@ -3,7 +3,7 @@ import { io } from 'socket.io-client';
 // Use the current hostname so phones can connect if they are on the same network
 const isProd = import.meta.env.PROD;
 const envUrl = import.meta.env.VITE_SERVER_URL;
-const defaultProdServerUrl = 'https://server.danieldgp.com';
+const defaultProdServerUrl = 'https://server.danielsdgp.com';
 
 // Check for server param in pathname: /join/CODE?server=...
 const serverParamFromSearch = new URLSearchParams(window.location.search).get('server') ?? undefined;

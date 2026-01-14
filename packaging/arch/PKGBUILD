@@ -1,0 +1,38 @@
+# PKGBUILD for Daniel's Dirty Game Pack (wrap AppImage)
+# This PKGBUILD installs the AppImage to /opt/danielsdgp and creates a /usr/bin wrapper.
+
+pkgname=daniels-dirty-game-pack
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Daniel's Dirty Game Pack - Client"
+arch=(x86_64)
+url="https://github.com/daniel/" # replace with real repo URL
+license=(MIT)
+depends=()
+makedepends=(fakeroot)
+source=("${pkgname}-${pkgver}.AppImage")
+sha256sums=('SKIP')
+
+package() {
+  install -d "$pkgdir/opt/$pkgname"
+  install -m755 "${srcdir}/${pkgname}-${pkgver}.AppImage" "$pkgdir/opt/$pkgname/$pkgname.AppImage"
+
+  # Create a simple launcher wrapper in /usr/bin
+  install -Dm755 -p /dev/null "$pkgdir/usr/bin/$pkgname"
+  cat > "$pkgdir/usr/bin/$pkgname" <<'EOF'
+#!/bin/sh
+APPDIR="/opt/daniels-dirty-game-pack"
+exec "$APPDIR/daniels-dirty-game-pack.AppImage" "$@"
+EOF
+  chmod +x "$pkgdir/usr/bin/$pkgname"
+
+  # Desktop file
+  install -d "$pkgdir/usr/share/applications"
+  install -m644 "$srcdir/$pkgname.desktop" "$pkgdir/usr/share/applications/$pkgname.desktop"
+
+  # Icon (if included in AppImage, we skip) - optional install here
+  install -d "$pkgdir/usr/share/icons/hicolor/256x256/apps"
+  if [ -f "$srcdir/$pkgname.png" ]; then
+    install -m644 "$srcdir/$pkgname.png" "$pkgdir/usr/share/icons/hicolor/256x256/apps/$pkgname.png"
+  fi
+}

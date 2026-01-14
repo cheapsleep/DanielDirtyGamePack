@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=Daniel's Dirty Game Pack
+Exec=daniels-dirty-game-pack %U
+Icon=daniels-dirty-game-pack
+Type=Application
+Categories=Game;Entertainment;
+StartupNotify=true

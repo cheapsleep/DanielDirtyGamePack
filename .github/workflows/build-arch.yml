@@ -1,0 +1,38 @@
+name: Build Arch Package
+
+on:
+  workflow_run:
+    workflows: ["Tauri CI Build"]
+    types:
+      - completed
+
+jobs:
+  build-arch:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - name: Download AppImage artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tauri-linux-artifacts
+          path: ./artifacts
+
+      - name: Prepare PKGBUILD folder
+        run: |
+          mkdir -p arch-build
+          cp packaging/arch/PKGBUILD arch-build/
+          cp packaging/arch/daniels-dirty-game-pack.desktop arch-build/
+          # Move AppImage into arch-build and rename to match PKGBUILD source
+          APPIMAGE=$(ls artifacts/*.AppImage | head -n 1)
+          if [ -z "$APPIMAGE" ]; then echo "No AppImage found"; exit 1; fi
+          cp "$APPIMAGE" arch-build/daniels-dirty-game-pack-0.1.0.AppImage
+
+      - name: Build Arch package in Docker
+        run: |
+          docker run --rm -v "$PWD/arch-build":/work -w /work archlinux:latest /bin/bash -lc "pacman -Sy --noconfirm base-devel fakeroot sudo && fakeroot makepkg -f"
+
+      - name: Upload Arch package
+        uses: actions/upload-artifact@v4
+        with:
+          name: arch-package
+          path: arch-build/*.pkg.tar.zst
