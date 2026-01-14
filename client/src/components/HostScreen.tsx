@@ -251,128 +251,70 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
         socket.on('room_created', onRoomCreated);
         socket.on('room_update', onRoomUpdate);
 
-    socket.on('new_prompt', (data) => {
-      setCurrentPrompt(data.prompt);
-      setTimeLeft(data.timeLimit);
-    });
+    const onNewPrompt = (data: any) => { setCurrentPrompt(data.prompt); setTimeLeft(data.timeLimit); };
+    const onStartPresentation = (data: any) => { setTimeLeft(data.timeLimit); };
+    const onStartInvesting = (data: any) => { setTimeLeft(data.timeLimit); };
+    const onStartVoting = (data: any) => { setVotingOptions(data.answers); setTimeLeft(data.timeLimit); };
+    const onRoundResults = (data: any) => { setRoundResults(data.results); };
+    const onAqQuestion = (data: any) => { setAqQuestion(data); };
+    const onAqResults = (data: any) => { setAqResults(data); };
+    const onAqTimer = (data: { timeLeft: number; questionNumber: number }) => { setTimeLeft(data.timeLeft); };
 
-    socket.on('start_presentation', (data) => {
-      // Server will emit room_update with the authoritative drawing/title/prompt.
-      // Only set the timer here to avoid overwriting presentationData before room_update arrives.
-      setTimeLeft(data.timeLimit);
-    });
+    // Scribble Scrabble handlers
+    const onScTimer = (data: { timeLeft: number }) => { setTimeLeft(data.timeLeft); };
+    const onScGuessChat = (data: { playerName: string; guess: string; isCorrect: boolean; isClose: boolean }) => { setScGuessChat(prev => [...prev, data]); };
+    const onScCorrectGuess = () => { /* handled by room_update */ };
+    const onScStrokeData = (data: { stroke: { points: { x: number; y: number }[]; color: string; width: number } }) => { strokeReceiver.addCompleteStroke(data.stroke); };
+    const onScClearCanvas = () => { strokeReceiver.clearStrokes(); };
+    const onScRoundEnd = (data: { word: string; scores: Record<string, number> }) => { setScRoundWord(data.word); setScRoundScores(data.scores); };
+    const onScGameEnd = (data: { finalScores: Record<string, number> }) => { setScRoundScores(data.finalScores); };
 
-    socket.on('start_investing', (data) => {
-        // Keep presentation data but update timer
-        setTimeLeft(data.timeLimit);
-    });
+    // Card Calamity handlers
+    const onCcTimer = (data: { timeLeft: number }) => { setCcTimeLeft(data.timeLeft); };
+    const onCcGameStart = () => {
+      setCcIsDealing(true);
+      setCcDealingStep('shuffle');
+      setTimeout(() => setCcDealingStep('deal'), 1500);
+      setTimeout(() => setCcDealingStep('flip'), 3500);
+      setTimeout(() => { setCcDealingStep('done'); setCcIsDealing(false); }, 4500);
+    };
+    const onCcGameEnd = () => { /* handled via room_update */ };
+    const onCcDeckShuffled = () => { setCcIsShuffling(true); setTimeout(() => setCcIsShuffling(false), 1500); };
 
-    socket.on('start_voting', (data) => {
-        setVotingOptions(data.answers);
-        setTimeLeft(data.timeLimit);
-    });
+    // SSS handlers
+    const onSssTimer = (data: { timeLeft: number }) => { setSssTimeLeft(data.timeLeft); };
+    const onSssResults = (data: any) => { setSssResults(data); setSssRevealPhase('hidden'); setTimeout(() => setSssRevealPhase('revealing'), 500); setTimeout(() => setSssRevealPhase('revealed'), 2500); };
+    const onSssGameEnd = () => { /* no-op */ };
 
-    socket.on('round_results', (data) => {
-        setRoundResults(data.results);
-    });
+    const onGameOver = () => { /* rely on room state 'END' */ };
 
-    socket.on('aq_question', (data) => {
-        setAqQuestion(data);
-    });
+    socket.on('new_prompt', onNewPrompt);
+    socket.on('start_presentation', onStartPresentation);
+    socket.on('start_investing', onStartInvesting);
+    socket.on('start_voting', onStartVoting);
+    socket.on('round_results', onRoundResults);
+    socket.on('aq_question', onAqQuestion);
+    socket.on('aq_results', onAqResults);
+    socket.on('aq_timer', onAqTimer);
 
-    socket.on('aq_results', (data) => {
-        setAqResults(data);
-    });
+    socket.on('sc_timer', onScTimer);
+    socket.on('sc_guess_chat', onScGuessChat);
+    socket.on('sc_correct_guess', onScCorrectGuess);
+    socket.on('sc_stroke_data', onScStrokeData);
+    socket.on('sc_clear_canvas', onScClearCanvas);
+    socket.on('sc_round_end', onScRoundEnd);
+    socket.on('sc_game_end', onScGameEnd);
 
-    socket.on('aq_timer', (data: { timeLeft: number; questionNumber: number }) => {
-        setTimeLeft(data.timeLeft);
-    });
+    socket.on('cc_timer', onCcTimer);
+    socket.on('cc_game_start', onCcGameStart);
+    socket.on('cc_game_end', onCcGameEnd);
+    socket.on('cc_deck_shuffled', onCcDeckShuffled);
 
-    // Scribble Scrabble events
-    socket.on('sc_timer', (data: { timeLeft: number }) => {
-        setTimeLeft(data.timeLeft);
-    });
+    socket.on('sss_timer', onSssTimer);
+    socket.on('sss_results', onSssResults);
+    socket.on('sss_game_end', onSssGameEnd);
 
-    socket.on('sc_guess_chat', (data: { playerName: string; guess: string; isCorrect: boolean; isClose: boolean }) => {
-        setScGuessChat(prev => [...prev, data]);
-    });
-
-    socket.on('sc_correct_guess', () => {
-        // Could show a notification, but room_update handles correctGuessers
-    });
-
-    socket.on('sc_stroke_data', (data: { stroke: { points: { x: number; y: number }[]; color: string; width: number } }) => {
-        strokeReceiver.addCompleteStroke(data.stroke);
-    });
-
-    socket.on('sc_clear_canvas', () => {
-        strokeReceiver.clearStrokes();
-    });
-
-    socket.on('sc_round_end', (data: { word: string; scores: Record<string, number> }) => {
-        setScRoundWord(data.word);
-        setScRoundScores(data.scores);
-    });
-
-    socket.on('sc_game_end', (data: { finalScores: Record<string, number> }) => {
-        setScRoundScores(data.finalScores);
-    });
-
-    // Card Calamity events
-    socket.on('cc_timer', (data: { timeLeft: number }) => {
-        setCcTimeLeft(data.timeLeft);
-    });
-
-    socket.on('cc_game_start', () => {
-        // Trigger dealing animation sequence
-        setCcIsDealing(true);
-        setCcDealingStep('shuffle');
-        setTimeout(() => setCcDealingStep('deal'), 1500);
-        setTimeout(() => setCcDealingStep('flip'), 3500);
-        setTimeout(() => {
-            setCcDealingStep('done');
-            setCcIsDealing(false);
-        }, 4500);
-    });
-
-    socket.on('cc_game_end', () => {
-        // Game end handled via room_update
-    });
-
-    socket.on('cc_deck_shuffled', () => {
-        setCcIsShuffling(true);
-        setTimeout(() => setCcIsShuffling(false), 1500);
-    });
-
-    // Scribble Scrabble: Scrambled events
-    socket.on('sss_timer', (data: { timeLeft: number }) => {
-        setSssTimeLeft(data.timeLeft);
-    });
-
-    socket.on('sss_results', (data: {
-      realDrawerId: string;
-      realPrompt: string;
-      allPrompts: Record<string, string>;
-      drawings: Record<string, string>;
-      votes: Record<string, string>;
-      roundScores: Record<string, { tricked: number; correct: boolean }>;
-      totalScores: Record<string, number>;
-      votesByTarget: Record<string, string[]>;
-    }) => {
-        setSssResults(data);
-        // Trigger reveal animation
-        setSssRevealPhase('hidden');
-        setTimeout(() => setSssRevealPhase('revealing'), 500);
-        setTimeout(() => setSssRevealPhase('revealed'), 2500);
-    });
-
-    socket.on('sss_game_end', () => {
-        // Game end handled via room state
-    });
-
-    socket.on('game_over', () => {
-        // Handle game over if needed separately, or rely on room state 'END'
-    });
+    socket.on('game_over', onGameOver);
 
         const onError = (data: any) => {
             const message = String(data?.message ?? 'Unknown error');
@@ -448,25 +390,7 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
         socket.on('lobby_closed', onLobbyClosed);
         socket.on('new_lobby_created', onNewLobbyCreated);
 
-    socket.on('connect_error', () => {
-      const target = socketServerUrl ? ` (${socketServerUrl})` : '';
-      setError(`Could not connect to game server${target}`);
-      if (socketServerUrl) {
-        const healthUrl = socketServerUrl.replace(/\/$/, '') + '/health';
-        fetch(healthUrl)
-          .then(r => (r.ok ? r.json() : null))
-          .then(data => {
-            if (data?.ok) setError(`Game server is reachable, but Socket.IO failed${target}`);
-          })
-          .catch(() => {
-            // ignore
-          });
-      }
-    });
-
-    socket.on('disconnect', () => {
-      setError('Disconnected from game server');
-    });
+        // connect_error and disconnect handled by named handlers above
 
     fallbackTimer = window.setTimeout(() => {
       if (didGetRoomUpdate) return;
@@ -491,30 +415,30 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
             socket.off('room_closed', onRoomClosed);
             socket.off('lobby_closed', onLobbyClosed);
             socket.off('new_lobby_created', onNewLobbyCreated);
-            // For other events registered anonymously earlier, remove broadly as before
-            socket.off('new_prompt');
-            socket.off('start_presentation');
-            socket.off('start_investing');
-            socket.off('start_voting');
-            socket.off('round_results');
-            socket.off('aq_question');
-            socket.off('aq_results');
-            socket.off('aq_timer');
-            socket.off('sc_timer');
-            socket.off('sc_guess_chat');
-            socket.off('sc_correct_guess');
-            socket.off('sc_stroke_data');
-            socket.off('sc_clear_canvas');
-            socket.off('sc_round_end');
-            socket.off('sc_game_end');
-            socket.off('cc_timer');
-            socket.off('cc_game_start');
-            socket.off('cc_game_end');
-            socket.off('cc_deck_shuffled');
-            socket.off('sss_timer');
-            socket.off('sss_results');
-            socket.off('sss_game_end');
-            socket.off('game_over');
+            // Remove handlers we registered earlier by reference
+            socket.off('new_prompt', onNewPrompt);
+            socket.off('start_presentation', onStartPresentation);
+            socket.off('start_investing', onStartInvesting);
+            socket.off('start_voting', onStartVoting);
+            socket.off('round_results', onRoundResults);
+            socket.off('aq_question', onAqQuestion);
+            socket.off('aq_results', onAqResults);
+            socket.off('aq_timer', onAqTimer);
+            socket.off('sc_timer', onScTimer);
+            socket.off('sc_guess_chat', onScGuessChat);
+            socket.off('sc_correct_guess', onScCorrectGuess);
+            socket.off('sc_stroke_data', onScStrokeData);
+            socket.off('sc_clear_canvas', onScClearCanvas);
+            socket.off('sc_round_end', onScRoundEnd);
+            socket.off('sc_game_end', onScGameEnd);
+            socket.off('cc_timer', onCcTimer);
+            socket.off('cc_game_start', onCcGameStart);
+            socket.off('cc_game_end', onCcGameEnd);
+            socket.off('cc_deck_shuffled', onCcDeckShuffled);
+            socket.off('sss_timer', onSssTimer);
+            socket.off('sss_results', onSssResults);
+            socket.off('sss_game_end', onSssGameEnd);
+            socket.off('game_over', onGameOver);
             socket.off('error');
         };
   }, [gameId, retryKey, strokeReceiver]);

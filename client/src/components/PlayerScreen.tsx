@@ -251,7 +251,7 @@ export default function PlayerScreen() {
       }
     }
 
-    socket.on('joined', (data: any) => {
+    const onJoined = (data: any) => {
       setJoined(true);
       setError('');
       const nextRoomCode = String(data?.roomCode ?? roomCode).toUpperCase();
@@ -266,12 +266,13 @@ export default function PlayerScreen() {
         }
       }
       if (data?.gameId) setGameId(String(data.gameId));
-    });
+    };
+    socket.on('joined', onJoined);
 
     // Track the previous state for comparison
     let prevState: string | undefined;
     
-    socket.on('room_update', (nextRoom: any) => {
+    const onRoomUpdate = (nextRoom: any) => {
       const stateChanged = prevState !== nextRoom?.state;
       prevState = nextRoom?.state;
       
@@ -286,159 +287,88 @@ export default function PlayerScreen() {
         setDpSelected('');
         if (nextRoom?.state !== 'DP_PICK') setDpChoices([]);
       }
-    });
+    };
+    socket.on('room_update', onRoomUpdate);
 
-    socket.on('new_prompt', (data) => {
-        setPrompt(data.prompt);
-        setSubmitted(false);
-        setAnswerDraft('');
-    });
+    const onNewPrompt = (data: any) => { setPrompt(data.prompt); setSubmitted(false); setAnswerDraft(''); };
+    socket.on('new_prompt', onNewPrompt);
 
-    socket.on('start_voting', (data) => {
-        setVotingOptions(data.answers);
-        setSubmitted(false);
-    });
+    const onStartVoting = (data: any) => { setVotingOptions(data.answers); setSubmitted(false); };
+    socket.on('start_voting', onStartVoting);
 
-    socket.on('dp_choices', (data: any) => {
-      const choices = Array.isArray(data?.choices) ? data.choices.map((c: any) => String(c)) : [];
-      setDpChoices(choices);
-      setSubmitted(false);
-    });
+    const onDpChoices = (data: any) => { const choices = Array.isArray(data?.choices) ? data.choices.map((c: any) => String(c)) : []; setDpChoices(choices); setSubmitted(false); };
+    socket.on('dp_choices', onDpChoices);
 
-    socket.on('start_presentation', (data: any) => {
-        setCurrentPresenterId(data.presenterId);
-        setSubmitted(false);
-    });
+    const onStartPresentation = (data: any) => { setCurrentPresenterId(data.presenterId); setSubmitted(false); };
+    socket.on('start_presentation', onStartPresentation);
 
-    socket.on('start_investing', (data: any) => {
-        setCurrentPresenterId(data.presenterId);
-        setSubmitted(false);
-        setInvestmentAmount('');
-    });
+    const onStartInvesting = (data: any) => { setCurrentPresenterId(data.presenterId); setSubmitted(false); setInvestmentAmount(''); };
+    socket.on('start_investing', onStartInvesting);
 
-    socket.on('aq_question', (data: any) => {
-      setAqQuestion({
-        questionId: data.questionId,
-        questionText: data.questionText,
-        questionNumber: data.questionNumber,
-        totalQuestions: data.totalQuestions
-      });
-      setAqAnswered(false);
-    });
+    const onAqQuestion = (data: any) => { setAqQuestion({ questionId: data.questionId, questionText: data.questionText, questionNumber: data.questionNumber, totalQuestions: data.totalQuestions }); setAqAnswered(false); };
+    socket.on('aq_question', onAqQuestion);
 
-    socket.on('aq_results', (data: any) => {
-      setAqResults({
-        rankings: data.rankings,
-        winnerId: data.winnerId,
-        winnerName: data.winnerName,
-        certificate: data.certificate,
-        loserId: data.loserId,
-        loserName: data.loserName,
-        loserCertificate: data.loserCertificate
-      });
-    });
+    const onAqResults = (data: any) => { setAqResults({ rankings: data.rankings, winnerId: data.winnerId, winnerName: data.winnerName, certificate: data.certificate, loserId: data.loserId, loserName: data.loserName, loserCertificate: data.loserCertificate }); };
+    socket.on('aq_results', onAqResults);
 
-    socket.on('aq_timer', (data: { timeLeft: number; questionNumber: number }) => {
-      setAqTimeLeft(data.timeLeft);
-    });
+    const onAqTimer = (data: { timeLeft: number; questionNumber: number }) => { setAqTimeLeft(data.timeLeft); };
+    socket.on('aq_timer', onAqTimer);
 
     // Scribble Scrabble events
-    socket.on('sc_word_options', (data: { words: string[] }) => {
-      setScWordOptions(data.words);
-    });
+    const onScWordOptions = (data: { words: string[] }) => { setScWordOptions(data.words); };
+    socket.on('sc_word_options', onScWordOptions);
 
-    socket.on('sc_timer', (data: { timeLeft: number }) => {
-      setScTimeLeft(data.timeLeft);
-    });
+    const onScTimer = (data: { timeLeft: number }) => { setScTimeLeft(data.timeLeft); };
+    socket.on('sc_timer', onScTimer);
 
-    socket.on('sc_guess_chat', (data: { playerId: string; playerName: string; guess: string; isCorrect: boolean; isClose: boolean }) => {
-      setScGuessChat(prev => [...prev, data]);
-    });
+    const onScGuessChat = (data: { playerId: string; playerName: string; guess: string; isCorrect: boolean; isClose: boolean }) => { setScGuessChat(prev => [...prev, data]); };
+    socket.on('sc_guess_chat', onScGuessChat);
 
-    socket.on('sc_correct_guess', () => {
-      // Notification handled by sc_guess_chat
-    });
+    const onScCorrectGuess = () => { /* notification handled elsewhere */ };
+    socket.on('sc_correct_guess', onScCorrectGuess);
 
-    socket.on('sc_stroke_data', () => {
-      // Players don't see the canvas - only host does
-    });
+    const onScStrokeData = () => { /* players don't see the canvas */ };
+    socket.on('sc_stroke_data', onScStrokeData);
 
-    socket.on('sc_clear_canvas', () => {
-      // Players don't see the canvas
-    });
+    const onScClearCanvas = () => { /* players don't see the canvas */ };
+    socket.on('sc_clear_canvas', onScClearCanvas);
 
-    socket.on('sc_round_end', (data: { word: string; correctGuessers: string[]; scores: Record<string, number> }) => {
-      setScRoundWord(data.word);
-      setScRoundScores(data.scores);
-      setScGuessChat([]);
-    });
+    const onScRoundEnd = (data: { word: string; correctGuessers: string[]; scores: Record<string, number> }) => { setScRoundWord(data.word); setScRoundScores(data.scores); setScGuessChat([]); };
+    socket.on('sc_round_end', onScRoundEnd);
 
-    socket.on('sc_game_end', () => {
-      // Game ended, handled by room state change
-    });
+    const onScGameEnd = () => { /* handled by room state change */ };
+    socket.on('sc_game_end', onScGameEnd);
 
     // Card Calamity events
-    socket.on('cc_game_start', () => {
-      // Start dealing animation - cards will be revealed after 4.5 seconds
-      setCcIsDealing(true);
-      setCcHand([]);
-      setCcPendingHand([]);
-      setTimeout(() => {
-        setCcIsDealing(false);
-      }, 4500);
-    });
+    const onCcGameStart = () => { setCcIsDealing(true); setCcHand([]); setCcPendingHand([]); setTimeout(() => { setCcIsDealing(false); }, 4500); };
+    socket.on('cc_game_start', onCcGameStart);
 
-    socket.on('cc_hand', (data: { cards: CCCard[] }) => {
-      // Store in pending hand - the useEffect will transfer when appropriate
-      setCcPendingHand(data.cards);
-      setCcSelectedCardId(null);
-    });
+    const onCcHand = (data: { cards: CCCard[] }) => { setCcPendingHand(data.cards); setCcSelectedCardId(null); };
+    socket.on('cc_hand', onCcHand);
 
-    socket.on('cc_timer', (data: { timeLeft: number }) => {
-      setCcTimeLeft(data.timeLeft);
-    });
+    const onCcTimer = (data: { timeLeft: number }) => { setCcTimeLeft(data.timeLeft); };
+    socket.on('cc_timer', onCcTimer);
 
-    socket.on('cc_invalid_play', () => {
-      // Flash the selected card or show error
-      setCcSelectedCardId(null);
-    });
+    const onCcInvalidPlay = () => { setCcSelectedCardId(null); };
+    socket.on('cc_invalid_play', onCcInvalidPlay);
 
-    socket.on('cc_game_end', () => {
-      // Game ended, handled by room state change
-    });
+    const onCcGameEnd = () => { /* handled by room state change */ };
+    socket.on('cc_game_end', onCcGameEnd);
 
     // Scribble Scrabble: Scrambled events
-    socket.on('sss_prompt', (data: { prompt: string; isReal: boolean }) => {
-      setSssPrompt(data.prompt);
-      setSssIsRealPrompt(data.isReal);
-      setSssDrawingSubmitted(false);
-      setSssVoteSubmitted(false);
-      setSssSelectedVote(null);
-      setSssResults(null);
-    });
+    const onSssPrompt = (data: { prompt: string; isReal: boolean }) => { setSssPrompt(data.prompt); setSssIsRealPrompt(data.isReal); setSssDrawingSubmitted(false); setSssVoteSubmitted(false); setSssSelectedVote(null); setSssResults(null); };
+    socket.on('sss_prompt', onSssPrompt);
 
-    socket.on('sss_timer', (data: { timeLeft: number }) => {
-      setSssTimeLeft(data.timeLeft);
-    });
+    const onSssTimer = (data: { timeLeft: number }) => { setSssTimeLeft(data.timeLeft); };
+    socket.on('sss_timer', onSssTimer);
 
-    socket.on('sss_results', (data: {
-      realDrawerId: string;
-      realPrompt: string;
-      allPrompts: Record<string, string>;
-      drawings: Record<string, string>;
-      votes: Record<string, string>;
-      roundScores: Record<string, { tricked: number; correct: boolean }>;
-      totalScores: Record<string, number>;
-      votesByTarget: Record<string, string[]>;
-    }) => {
-      setSssResults(data);
-    });
+    const onSssResults = (data: any) => { setSssResults(data); };
+    socket.on('sss_results', onSssResults);
 
-    socket.on('sss_game_end', () => {
-      // Game ended, handled by room state change
-    });
+    const onSssGameEnd = () => { /* handled by room state change */ };
+    socket.on('sss_game_end', onSssGameEnd);
 
-    socket.on('error', (data) => {
+    const onError = (data: any) => {
         if (data?.code === 'GAME_ERROR') {
           setSubmitted(false);
           alert(data.message); // Simple alert for now, or use a toast state
@@ -446,13 +376,11 @@ export default function PlayerScreen() {
         }
         setError(data.message);
         setJoined(false);
-    });
+    };
+    socket.on('error', onError);
 
-    socket.on('connect_error', () => {
-      const target = socketServerUrl ? ` (${socketServerUrl})` : '';
-      setError(`Could not connect to game server${target}`);
-      setJoined(false);
-    });
+    const onConnectError = () => { const target = socketServerUrl ? ` (${socketServerUrl})` : ''; setError(`Could not connect to game server${target}`); setJoined(false); };
+    socket.on('connect_error', onConnectError);
 
     const onRoomClosed = () => {
       setError('Room closed');
@@ -489,33 +417,33 @@ export default function PlayerScreen() {
     return () => {
       socket.off('joined');
       socket.off('room_update');
-      socket.off('new_prompt');
-      socket.off('start_voting');
-      socket.off('dp_choices');
-      socket.off('start_presentation');
-      socket.off('start_investing');
-      socket.off('aq_question');
-      socket.off('aq_results');
-      socket.off('aq_timer');
-      socket.off('sc_word_options');
-      socket.off('sc_timer');
-      socket.off('sc_guess_chat');
-      socket.off('sc_correct_guess');
-      socket.off('sc_stroke_data');
-      socket.off('sc_clear_canvas');
-      socket.off('sc_round_end');
-      socket.off('sc_game_end');
-      socket.off('cc_game_start');
-      socket.off('cc_hand');
-      socket.off('cc_timer');
-      socket.off('cc_invalid_play');
-      socket.off('cc_game_end');
-      socket.off('sss_prompt');
-      socket.off('sss_timer');
-      socket.off('sss_results');
-      socket.off('sss_game_end');
-      socket.off('error');
-      socket.off('connect_error');
+      socket.off('new_prompt', onNewPrompt);
+      socket.off('start_voting', onStartVoting);
+      socket.off('dp_choices', onDpChoices);
+      socket.off('start_presentation', onStartPresentation);
+      socket.off('start_investing', onStartInvesting);
+      socket.off('aq_question', onAqQuestion);
+      socket.off('aq_results', onAqResults);
+      socket.off('aq_timer', onAqTimer);
+      socket.off('sc_word_options', onScWordOptions);
+      socket.off('sc_timer', onScTimer);
+      socket.off('sc_guess_chat', onScGuessChat);
+      socket.off('sc_correct_guess', onScCorrectGuess);
+      socket.off('sc_stroke_data', onScStrokeData);
+      socket.off('sc_clear_canvas', onScClearCanvas);
+      socket.off('sc_round_end', onScRoundEnd);
+      socket.off('sc_game_end', onScGameEnd);
+      socket.off('cc_game_start', onCcGameStart);
+      socket.off('cc_hand', onCcHand);
+      socket.off('cc_timer', onCcTimer);
+      socket.off('cc_invalid_play', onCcInvalidPlay);
+      socket.off('cc_game_end', onCcGameEnd);
+      socket.off('sss_prompt', onSssPrompt);
+      socket.off('sss_timer', onSssTimer);
+      socket.off('sss_results', onSssResults);
+      socket.off('sss_game_end', onSssGameEnd);
+      socket.off('error', onError);
+      socket.off('connect_error', onConnectError);
       socket.off('room_closed', onRoomClosed);
       socket.off('lobby_closed', onLobbyClosed);
     };
