@@ -690,8 +690,8 @@ export default function PlayerScreen() {
   const isInGame = gameState !== 'LOBBY' && gameState !== 'END';
 
   return (
-    <div className="w-full h-screen p-4 flex flex-col bg-slate-900 text-white">
-      <div className="flex justify-between items-center mb-4 text-sm text-slate-500 border-b border-slate-700 pb-2">
+    <div className="w-full h-screen max-h-screen p-2 sm:p-4 flex flex-col bg-slate-900 text-white overflow-y-auto">
+      <div className="flex justify-between items-center mb-2 sm:mb-4 text-xs sm:text-sm text-slate-500 border-b border-slate-700 pb-1 sm:pb-2">
           <div className="flex items-center gap-2">
             {isInGame && (
               <button
@@ -1753,7 +1753,7 @@ export default function PlayerScreen() {
 
         {/* Scribble Scrabble: Scrambled - Drawing */}
         {gameState === 'SSS_DRAWING' && (
-          <div className="w-full max-w-lg mx-auto">
+          <div className="w-full max-w-lg mx-auto px-1 sm:px-0">
             <div className="text-center mb-4">
               <div className="text-4xl font-bold text-purple-400 mb-1">
                 {sssTimeLeft}<span className="text-xl">s</span>
@@ -1791,15 +1791,20 @@ export default function PlayerScreen() {
               </div>
             ) : (
               <>
-                <ScribbleCanvas
-                  ref={sssCanvasRef}
-                  mode="draw"
-                  width={400}
-                  height={300}
-                  onStroke={() => {}}
-                  onClear={() => {}}
-                  className="mx-auto mb-4"
-                />
+                <div className="w-full flex justify-center mb-2">
+                  <div className="w-full max-w-xs">
+                    <ScribbleCanvas
+                      ref={sssCanvasRef}
+                      mode="draw"
+                      width={400}
+                      height={300}
+                      onStroke={() => {}}
+                      onClear={() => {}}
+                      className="w-full h-auto mx-auto rounded-lg"
+                      style={{ maxWidth: '100%' }}
+                    />
+                  </div>
+                </div>
                 <WoodenButton
                   type="button"
                   variant="red"
@@ -1810,7 +1815,7 @@ export default function PlayerScreen() {
                       setSssDrawingSubmitted(true);
                     }
                   }}
-                  className="w-full"
+                  className="w-full py-2 text-base sm:text-lg"
                 >
                   SUBMIT DRAWING
                 </WoodenButton>
@@ -1821,7 +1826,7 @@ export default function PlayerScreen() {
 
         {/* Scribble Scrabble: Scrambled - Voting */}
         {gameState === 'SSS_VOTING' && (
-          <div className="w-full max-w-lg mx-auto">
+          <div className="w-full max-w-lg mx-auto px-1 sm:px-0">
             <div className="text-center mb-4">
               <h2 className="text-2xl font-bold text-purple-400 mb-2">🗳️ Vote!</h2>
               <p className="text-slate-400">Which drawing had the REAL prompt?</p>
@@ -1843,7 +1848,7 @@ export default function PlayerScreen() {
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-2 gap-3 mb-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 mb-2 sm:mb-4">
                   {Object.entries(room?.sssDrawings ?? {})
                     .filter(([pid]) => pid !== playerId)
                     .map(([pid, drawing]) => {
@@ -1864,7 +1869,7 @@ export default function PlayerScreen() {
                             <img
                               src={drawing}
                               alt={`Drawing by ${player?.name}`}
-                              className="w-full aspect-[4/3] object-contain bg-white"
+                              className="w-full aspect-[4/3] object-contain bg-white max-w-full h-auto"
                             />
                           ) : (
                             <div className="w-full aspect-[4/3] bg-slate-700 flex items-center justify-center">
@@ -1891,7 +1896,7 @@ export default function PlayerScreen() {
                     }
                   }}
                   disabled={!sssSelectedVote}
-                  className={`w-full ${!sssSelectedVote ? 'opacity-50' : ''}`}
+                  className={`w-full py-2 text-base sm:text-lg ${!sssSelectedVote ? 'opacity-50' : ''}`}
                 >
                   CONFIRM VOTE
                 </WoodenButton>
