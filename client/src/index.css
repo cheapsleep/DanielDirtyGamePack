@@ -22,7 +22,32 @@
 
   body {
     @apply bg-slate-900 text-white;
+    /* Hide system scroll bar but allow scrolling */
+    overflow: auto;
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none;  /* IE and Edge */
   }
+
+  body::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
+  }
+}
+
+/* Custom scrollable container with visible, styled scroll bar */
+.custom-scrollbar {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #8b5e3b #071027;
+}
+.custom-scrollbar::-webkit-scrollbar {
+  width: 12px;
+  background: #071027;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #8b5e3b;
+  border-radius: 8px;
+  border: 2px solid #071027;
+}
 }
 
 @layer components {
