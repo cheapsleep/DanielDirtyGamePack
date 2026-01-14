@@ -198,7 +198,7 @@ export default function PlayerScreen({ onBack }: PlayerScreenProps) {
   const [scRoundWord, setScRoundWord] = useState<string>('');
   const [scRoundScores, setScRoundScores] = useState<Record<string, number>>({});
   // Card Calamity state
-  const [ccHand, setCcHand] = useState<{ id: string; color: 'red' | 'blue' | 'green' | 'yellow' | null; type: string; value?: number }[]>([]);
+  const [ccHand, setCcHand] = useState<CCCard[]>([]);
   const [ccTimeLeft, setCcTimeLeft] = useState(30);
   const [ccSelectedCardId, setCcSelectedCardId] = useState<string | null>(null);
 

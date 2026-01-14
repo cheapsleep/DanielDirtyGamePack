@@ -414,7 +414,6 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
     : '';
   const isPatented = room ? (room.gameId ?? gameId) === 'dubiously-patented' : false;
   const isScribble = room ? (room.gameId ?? gameId) === 'scribble-scrabble' : false;
-  const _isCardCalamity = room ? (room.gameId ?? gameId) === 'card-calamity' : false;
   const isPromptPhase = room ? room.state === 'NL_ANSWER' : false;
   const isVotingPhase = room ? room.state === 'NL_VOTING' : false;
   const isResultsPhase = room ? room.state === 'NL_RESULTS' || room.state === 'DP_RESULTS' : false;
