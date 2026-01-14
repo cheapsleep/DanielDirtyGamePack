@@ -454,7 +454,7 @@ export default function PlayerScreen() {
       setJoined(false);
     });
 
-    socket.on('room_closed', () => {
+    const onRoomClosed = (data?: any) => {
       setError('Room closed');
       setJoined(false);
       setRoom(null);
@@ -466,9 +466,9 @@ export default function PlayerScreen() {
           // ignore
         }
       }
-    });
+    };
 
-    socket.on('lobby_closed', () => {
+    const onLobbyClosed = (data?: any) => {
       // Controller created a new lobby, kick players back to join screen
       setError('Lobby closed by controller');
       setJoined(false);
@@ -481,7 +481,10 @@ export default function PlayerScreen() {
           // ignore
         }
       }
-    });
+    };
+
+    socket.on('room_closed', onRoomClosed);
+    socket.on('lobby_closed', onLobbyClosed);
 
     return () => {
       socket.off('joined');
@@ -513,8 +516,8 @@ export default function PlayerScreen() {
       socket.off('sss_game_end');
       socket.off('error');
       socket.off('connect_error');
-      socket.off('room_closed');
-      socket.off('lobby_closed');
+      socket.off('room_closed', onRoomClosed);
+      socket.off('lobby_closed', onLobbyClosed);
     };
   }, []);
 

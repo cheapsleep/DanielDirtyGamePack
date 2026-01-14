@@ -230,23 +230,26 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
       }
     };
 
-    socket.on('room_created', (data: any) => {
-      const roomCode = String(data?.roomCode ?? '');
-      const hostKey = String(data?.hostKey ?? '');
-      if (!roomCode || !hostKey) return;
-      sessionStorage.setItem(storageKey, JSON.stringify({ roomCode, hostKey }));
-    });
+        const onRoomCreated = (data: any) => {
+            const roomCode = String(data?.roomCode ?? '');
+            const hostKey = String(data?.hostKey ?? '');
+            if (!roomCode || !hostKey) return;
+            sessionStorage.setItem(storageKey, JSON.stringify({ roomCode, hostKey }));
+        };
 
-    socket.on('room_update', (roomState: RoomState) => {
-      didGetRoomUpdate = true;
-      setRoom(roomState);
-      // If the game ended, clear saved host info so starting again creates a fresh room
-      try {
-        if (roomState?.state === 'END') sessionStorage.removeItem(storageKey);
-      } catch {
-        // ignore
-      }
-    });
+        const onRoomUpdate = (roomState: RoomState) => {
+            didGetRoomUpdate = true;
+            setRoom(roomState);
+            // If the game ended, clear saved host info so starting again creates a fresh room
+            try {
+                if (roomState?.state === 'END') sessionStorage.removeItem(storageKey);
+            } catch {
+                // ignore
+            }
+        };
+
+        socket.on('room_created', onRoomCreated);
+        socket.on('room_update', onRoomUpdate);
 
     socket.on('new_prompt', (data) => {
       setCurrentPrompt(data.prompt);
@@ -371,14 +374,81 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
         // Handle game over if needed separately, or rely on room state 'END'
     });
 
-    socket.on('error', (data) => {
-      const message = String(data?.message ?? 'Unknown error');
-      setError(message);
-      if (!didGetRoomUpdate && saved?.roomCode && (message.includes('Room not found') || message.includes('Invalid host key'))) {
-        sessionStorage.removeItem(storageKey);
-        createRoom();
-      }
-    });
+        const onError = (data: any) => {
+            const message = String(data?.message ?? 'Unknown error');
+            setError(message);
+            if (!didGetRoomUpdate && saved?.roomCode && (message.includes('Room not found') || message.includes('Invalid host key'))) {
+                sessionStorage.removeItem(storageKey);
+                createRoom();
+            }
+        };
+        socket.on('error', onError);
+
+        const onConnectError = () => {
+            const target = socketServerUrl ? ` (${socketServerUrl})` : '';
+            setError(`Could not connect to game server${target}`);
+            if (socketServerUrl) {
+                const healthUrl = socketServerUrl.replace(/\/$/, '') + '/health';
+                fetch(healthUrl)
+                    .then(r => (r.ok ? r.json() : null))
+                    .then(data => {
+                        if (data?.ok) setError(`Game server is reachable, but Socket.IO failed${target}`);
+                    })
+                    .catch(() => {
+                        // ignore
+                    });
+            }
+        };
+        socket.on('connect_error', onConnectError);
+
+        const onDisconnect = () => setError('Disconnected from game server');
+        socket.on('disconnect', onDisconnect);
+
+        // Host-specific lifecycle events
+        const onRoomClosed = (data?: any) => {
+            const closedCode = data?.roomCode ?? null;
+            // If the closed code matches our current room (or no code provided), clear and navigate back
+            if (!closedCode || closedCode === room?.code) {
+                setError('Room closed');
+                try { sessionStorage.removeItem(storageKey); } catch {}
+                setRoom(null);
+                onBack();
+            }
+        };
+
+        const onLobbyClosed = (data?: any) => {
+            const closedCode = data?.roomCode ?? null;
+            if (!closedCode || closedCode === room?.code) {
+                setError('Lobby closed by controller');
+                try { sessionStorage.removeItem(storageKey); } catch {}
+                setRoom(null);
+                onBack();
+            }
+        };
+
+        const onNewLobbyCreated = (data: any) => {
+            const oldCode = String(data?.oldCode ?? '');
+            const newCode = String(data?.newCode ?? '');
+            const newGameId = String(data?.gameId ?? gameId);
+            // If this host is being moved to a new lobby, update sessionStorage and wait for room_update
+            try {
+                const savedHost = JSON.parse(sessionStorage.getItem(storageKey) ?? 'null');
+                if (savedHost && savedHost.hostKey && newCode) {
+                    sessionStorage.setItem(storageKey, JSON.stringify({ roomCode: newCode, hostKey: savedHost.hostKey }));
+                }
+            } catch (_) {}
+            // Optionally set a small retry to request room_update if it doesn't arrive
+            setTimeout(() => {
+                // If we don't have a room yet, attempt to rejoin (server should have already moved the socket)
+                if (!room) {
+                    socket.emit('join_room', { roomCode: newCode, isHost: true, hostKey: JSON.parse(sessionStorage.getItem(storageKey) ?? '{}')?.hostKey });
+                }
+            }, 250);
+        };
+
+        socket.on('room_closed', onRoomClosed);
+        socket.on('lobby_closed', onLobbyClosed);
+        socket.on('new_lobby_created', onNewLobbyCreated);
 
     socket.on('connect_error', () => {
       const target = socketServerUrl ? ` (${socketServerUrl})` : '';
@@ -412,37 +482,43 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
       socket.once('connect', joinOrCreate);
     }
 
-    return () => {
-      if (fallbackTimer) window.clearTimeout(fallbackTimer);
-      socket.off('connect_error');
-      socket.off('disconnect');
-      socket.off('room_created');
-      socket.off('room_update');
-      socket.off('new_prompt');
-      socket.off('start_presentation');
-      socket.off('start_investing');
-      socket.off('start_voting');
-      socket.off('round_results');
-      socket.off('aq_question');
-      socket.off('aq_results');
-      socket.off('aq_timer');
-      socket.off('sc_timer');
-      socket.off('sc_guess_chat');
-      socket.off('sc_correct_guess');
-      socket.off('sc_stroke_data');
-      socket.off('sc_clear_canvas');
-      socket.off('sc_round_end');
-      socket.off('sc_game_end');
-      socket.off('cc_timer');
-      socket.off('cc_game_start');
-      socket.off('cc_game_end');
-      socket.off('cc_deck_shuffled');
-      socket.off('sss_timer');
-      socket.off('sss_results');
-      socket.off('sss_game_end');
-      socket.off('game_over');
-      socket.off('error');
-    };
+        return () => {
+            if (fallbackTimer) window.clearTimeout(fallbackTimer);
+            // Remove handlers we registered by reference
+            socket.off('room_created', onRoomCreated);
+            socket.off('room_update', onRoomUpdate);
+            socket.off('error', onError);
+            socket.off('connect_error', onConnectError);
+            socket.off('disconnect', onDisconnect);
+            socket.off('room_closed', onRoomClosed);
+            socket.off('lobby_closed', onLobbyClosed);
+            socket.off('new_lobby_created', onNewLobbyCreated);
+            // For other events registered anonymously earlier, remove broadly as before
+            socket.off('new_prompt');
+            socket.off('start_presentation');
+            socket.off('start_investing');
+            socket.off('start_voting');
+            socket.off('round_results');
+            socket.off('aq_question');
+            socket.off('aq_results');
+            socket.off('aq_timer');
+            socket.off('sc_timer');
+            socket.off('sc_guess_chat');
+            socket.off('sc_correct_guess');
+            socket.off('sc_stroke_data');
+            socket.off('sc_clear_canvas');
+            socket.off('sc_round_end');
+            socket.off('sc_game_end');
+            socket.off('cc_timer');
+            socket.off('cc_game_start');
+            socket.off('cc_game_end');
+            socket.off('cc_deck_shuffled');
+            socket.off('sss_timer');
+            socket.off('sss_results');
+            socket.off('sss_game_end');
+            socket.off('game_over');
+            socket.off('error');
+        };
   }, [gameId, retryKey, strokeReceiver]);
 
   useEffect(() => {
