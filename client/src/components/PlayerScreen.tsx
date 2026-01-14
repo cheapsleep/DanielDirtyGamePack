@@ -1801,7 +1801,6 @@ export default function PlayerScreen() {
                       onStroke={() => {}}
                       onClear={() => {}}
                       className="w-full h-auto mx-auto rounded-lg"
-                      style={{ maxWidth: '100%' }}
                     />
                   </div>
                 </div>
