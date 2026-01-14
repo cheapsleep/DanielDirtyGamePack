@@ -100,11 +100,6 @@ function DrawingCanvas({ onChange }: { onChange: (data: string) => void }) {
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-interface PlayerScreenProps {
-  // No props needed currently
-}
-
 type GameState =
   | 'LOBBY'
   | 'NL_PROMPT_SUBMIT'
@@ -1537,7 +1532,7 @@ export default function PlayerScreen() {
                   <div className="flex flex-col gap-4">
                     <WoodenButton 
                       type="button" 
-                      variant="green" 
+                      variant="wood" 
                       onClick={() => {
                         socket.emit('game_action', { action: 'PLAY_AGAIN' });
                       }} 
