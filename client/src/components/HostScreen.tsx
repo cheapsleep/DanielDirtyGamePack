@@ -1209,7 +1209,7 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
                             </div>
                         )}
                     </div>
-                    {room.ccDrawStack && room.ccDrawStack > 0 && (
+                    {room.ccDrawStack > 0 && (
                         <div className="bg-red-600 px-4 py-2 rounded-xl text-white font-bold text-xl animate-bounce">
                             +{room.ccDrawStack} STACK!
                         </div>

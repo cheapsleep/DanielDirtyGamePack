@@ -1488,7 +1488,7 @@ export default function PlayerScreen() {
                 </div>
               )}
               
-              {room?.ccDrawStack && room.ccDrawStack > 0 && (
+              {room?.ccDrawStack > 0 && (
                 <div className="text-xl font-bold text-red-400 animate-pulse mt-2">
                   +{room.ccDrawStack} cards to draw!
                 </div>
