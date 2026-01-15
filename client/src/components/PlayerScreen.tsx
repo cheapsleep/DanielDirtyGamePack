@@ -1569,6 +1569,48 @@ export default function PlayerScreen() {
               )}
             </div>
 
+            {/* Player list */}
+            <div className="mt-4 px-4">
+              <div className="bg-slate-800 rounded-lg p-3">
+                <h3 className="text-sm font-bold text-slate-300 mb-2 text-center">Players</h3>
+                <div className="space-y-1">
+                  {room?.ccTurnOrder?.map((turnPlayerId) => {
+                    const player = room.players?.find(p => p.id === turnPlayerId);
+                    const cardCount = room.ccHandCounts?.[turnPlayerId] ?? 0;
+                    const isCurrent = turnPlayerId === room.ccCurrentPlayerId;
+                    const isMe = turnPlayerId === playerId;
+                    
+                    return (
+                      <div
+                        key={turnPlayerId}
+                        className={`flex items-center justify-between p-2 rounded ${
+                          isCurrent 
+                            ? 'bg-yellow-500/20 border border-yellow-400' 
+                            : isMe 
+                              ? 'bg-blue-500/20 border border-blue-400'
+                              : 'bg-slate-700'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className={`font-bold text-sm ${isCurrent ? 'text-yellow-300' : isMe ? 'text-blue-300' : 'text-white'}`}>
+                            {player?.name ?? 'Unknown'}
+                            {isMe && ' (You)'}
+                          </span>
+                          {isCurrent && <span className="text-xs text-yellow-400">🎯</span>}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="text-lg">🃏</span>
+                          <span className={`text-sm font-bold ${cardCount <= 2 ? 'text-red-400' : 'text-white'}`}>
+                            {cardCount}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
             {/* Draw button */}
             {room?.ccCurrentPlayerId === playerId && gameState === 'CC_PLAYING' && (
               <div className="mt-4 px-4">

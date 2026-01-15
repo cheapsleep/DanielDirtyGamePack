@@ -1187,11 +1187,12 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
                 <div className="flex-1 flex items-center justify-center relative">
                     {/* Player ring around discard */}
                     <div className="absolute inset-0 flex items-center justify-center">
-                        {room.ccTurnOrder?.map((playerId, idx) => {
-                            const player = room.players.find(p => p.id === playerId);
+                        {room.players.filter(p => p.isConnected || p.isBot).sort((a, b) => a.id.localeCompare(b.id)).map((player, idx) => {
+                            const playerId = player.id;
                             const isCurrent = playerId === room.ccCurrentPlayerId;
                             const cardCount = room.ccHandCounts?.[playerId] ?? 0;
-                            const angle = (idx / (room.ccTurnOrder?.length ?? 1)) * 2 * Math.PI - Math.PI / 2;
+                            const activePlayers = room.players.filter(p => p.isConnected || p.isBot);
+                            const angle = (idx / activePlayers.length) * 2 * Math.PI - Math.PI / 2;
                             const radius = Math.min(300, window.innerWidth * 0.25);
                             const x = Math.cos(angle) * radius;
                             const y = Math.sin(angle) * radius;
