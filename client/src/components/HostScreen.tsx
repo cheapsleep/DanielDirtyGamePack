@@ -1193,7 +1193,7 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
                             const cardCount = room.ccHandCounts?.[playerId] ?? 0;
                             const activePlayers = room.players.filter(p => p.isConnected || p.isBot);
                             const angle = (idx / activePlayers.length) * 2 * Math.PI - Math.PI / 2;
-                            const radius = Math.min(200, window.innerWidth * 0.18);
+                            const radius = Math.min(250, window.innerWidth * 0.22);
                             const x = Math.cos(angle) * radius;
                             const y = Math.sin(angle) * radius;
                             
@@ -1211,6 +1211,11 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
                                 >
                                     <span className={`font-bold text-sm truncate max-w-24 ${isCurrent ? 'text-yellow-300' : 'text-white'}`}>
                                         {player?.name ?? 'Unknown'}
+                                        {isCurrent && room.ccDirection && (
+                                            <span className="ml-1 text-yellow-400">
+                                                {room.ccDirection === 1 ? '↻' : '↺'}
+                                            </span>
+                                        )}
                                     </span>
                                     <div className="flex items-center gap-1">
                                         <span className="text-2xl">🃏</span>
