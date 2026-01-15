@@ -665,7 +665,7 @@ export default function PlayerScreen() {
                     {isMe && ' (You)'}
                   </span>
                   {isCurrent && <span className="text-yellow-400">🎯</span>}
-                  {gameState.startsWith('CC_') && (
+                  {gameState.startsWith('CC_') && cardCount > 0 && (
                     <>
                       <span className="text-white">🃏</span>
                       <span className={`font-bold ${cardCount <= 2 ? 'text-red-400' : 'text-white'}`}>
@@ -1457,9 +1457,11 @@ export default function PlayerScreen() {
               <div className="flex items-center gap-2">
                 {room?.ccActiveColor && <ActiveColorIndicator color={room.ccActiveColor} />}
               </div>
-              <div className={`text-2xl font-mono font-bold ${ccTimeLeft <= 10 ? 'text-red-500 animate-pulse' : 'text-white'}`}>
-                {ccTimeLeft}s
-              </div>
+              {ccTimeLeft > 0 && (
+                <div className={`text-2xl font-mono font-bold ${ccTimeLeft <= 10 ? 'text-red-500 animate-pulse' : 'text-white'}`}>
+                  {ccTimeLeft}s
+                </div>
+              )}
             </div>
 
             {/* Your turn indicator / info */}
