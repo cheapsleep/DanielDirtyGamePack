@@ -1576,8 +1576,8 @@ export default function PlayerScreen() {
                               exit={{ scale: 0, x: -100 }}
                               transition={{ 
                                 type: 'spring', 
-                                stiffness: 250,
-                                damping: 40,
+                                stiffness: 200,
+                                damping: 50,
                                 delay: index * 0.1 // Stagger the cards
                               }}
                             >
