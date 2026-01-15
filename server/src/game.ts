@@ -2558,9 +2558,10 @@ export class GameManager {
     // Shuffle player order for fair rotation of who gets real prompt
     room.sssRealDrawerOrder = [...activePlayers.map(p => p.id)].sort(() => Math.random() - 0.5);
     
-    // If double rounds, duplicate the order
+    // If double rounds, create a second completely different randomization
     if (room.sssDoubleRounds) {
-      room.sssRealDrawerOrder = [...room.sssRealDrawerOrder, ...room.sssRealDrawerOrder.sort(() => Math.random() - 0.5)];
+      const secondOrder = [...activePlayers.map(p => p.id)].sort(() => Math.random() - 0.5);
+      room.sssRealDrawerOrder = [...room.sssRealDrawerOrder, ...secondOrder];
     }
     
     room.totalRounds = room.sssRealDrawerOrder.length;
