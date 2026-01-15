@@ -1193,7 +1193,7 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
                             const cardCount = room.ccHandCounts?.[playerId] ?? 0;
                             const activePlayers = room.players.filter(p => p.isConnected || p.isBot);
                             const angle = (idx / activePlayers.length) * 2 * Math.PI - Math.PI / 2;
-                            const radius = Math.min(300, window.innerWidth * 0.25);
+                            const radius = Math.min(200, window.innerWidth * 0.18);
                             const x = Math.cos(angle) * radius;
                             const y = Math.sin(angle) * radius;
                             
