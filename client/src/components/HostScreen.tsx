@@ -476,9 +476,11 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
         ? 'Who Is The Most Autistic?'
         : (room.gameId ?? gameId) === 'scribble-scrabble'
           ? 'Scribble Scrabble'
-          : (room.gameId ?? gameId) === 'card-calamity'
-            ? 'Card Calamity'
-            : 'Nasty Libs'
+          : (room.gameId ?? gameId) === 'scribble-scrabble-scrambled'
+            ? 'Scribble Scrabble: Scrambled'
+            : (room.gameId ?? gameId) === 'card-calamity'
+              ? 'Card Calamity'
+              : 'Nasty Libs'
     : '';
   const gameLogo = room
     ? (room.gameId ?? gameId) === 'dubiously-patented'
@@ -487,9 +489,11 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
         ? '/assets/Autism_Assessment_Logo.png'
         : (room.gameId ?? gameId) === 'scribble-scrabble'
           ? '/assets/Scribble_Scrabble_Logo.png'
-          : (room.gameId ?? gameId) === 'card-calamity'
-            ? '/assets/Card_Calamity_Logo.svg'
-            : '/assets/Nasty_Libs_Logo.svg'
+          : (room.gameId ?? gameId) === 'scribble-scrabble-scrambled'
+            ? '/assets/SSS_Logo.svg'
+            : (room.gameId ?? gameId) === 'card-calamity'
+              ? '/assets/Card_Calamity_Logo.svg'
+              : '/assets/Nasty_Libs_Logo.svg'
     : '';
   const isPatented = room ? (room.gameId ?? gameId) === 'dubiously-patented' : false;
   const isScribble = room ? (room.gameId ?? gameId) === 'scribble-scrabble' : false;
