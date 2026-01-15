@@ -1200,31 +1200,33 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
                             return (
                                 <motion.div
                                     key={playerId}
-                                    className={`absolute flex flex-col items-center gap-1 p-3 rounded-xl transition-all ${
-                                        isCurrent 
-                                            ? 'bg-yellow-500/30 border-2 border-yellow-400 scale-110' 
-                                            : 'bg-slate-800/70'
-                                    }`}
+                                    className="absolute flex items-center gap-2"
                                     style={{
                                         transform: `translate(${x}px, ${y}px)`
                                     }}
                                 >
-                                    <span className={`font-bold text-sm truncate max-w-24 ${isCurrent ? 'text-yellow-300' : 'text-white'}`}>
-                                        {player?.name ?? 'Unknown'}
-                                        {isCurrent && room.ccDirection && (
-                                            <span className="ml-1 text-yellow-400">
-                                                {room.ccDirection === 1 ? '↻' : '↺'}
-                                            </span>
-                                        )}
-                                    </span>
-                                    <div className="flex items-center gap-1">
-                                        <span className="text-2xl">🃏</span>
-                                        <span className={`text-xl font-bold ${cardCount <= 2 ? 'text-red-400' : 'text-white'}`}>
-                                            {cardCount}
+                                    <div className={`flex flex-col items-center gap-1 p-3 rounded-xl transition-all ${
+                                        isCurrent 
+                                            ? 'bg-yellow-500/30 border-2 border-yellow-400 scale-110' 
+                                            : 'bg-slate-800/70'
+                                    }`}>
+                                        <span className={`font-bold text-sm truncate max-w-24 ${isCurrent ? 'text-yellow-300' : 'text-white'}`}>
+                                            {player?.name ?? 'Unknown'}
                                         </span>
+                                        <div className="flex items-center gap-1">
+                                            <span className="text-2xl">🃏</span>
+                                            <span className={`text-xl font-bold ${cardCount <= 2 ? 'text-red-400' : 'text-white'}`}>
+                                                {cardCount}
+                                            </span>
+                                        </div>
+                                        {isCurrent && room.state === 'CC_PICK_COLOR' && (
+                                            <span className="text-xs text-yellow-400 animate-pulse">Picking color...</span>
+                                        )}
                                     </div>
-                                    {isCurrent && room.state === 'CC_PICK_COLOR' && (
-                                        <span className="text-xs text-yellow-400 animate-pulse">Picking color...</span>
+                                    {isCurrent && room.ccDirection && (
+                                        <span className="text-yellow-400 text-xl">
+                                            {room.ccDirection === 1 ? '↻' : '↺'}
+                                        </span>
                                     )}
                                 </motion.div>
                             );
