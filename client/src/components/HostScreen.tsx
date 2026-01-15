@@ -1171,18 +1171,14 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
                         <DirectionIndicator direction={room.ccDirection ?? 1} />
                         {room.ccActiveColor && <ActiveColorIndicator color={room.ccActiveColor} />}
                     </div>
-                    <div className="flex flex-col items-end gap-1">
-                        <div className={`text-5xl font-mono font-bold ${ccTimeLeft <= 10 ? 'text-red-500 animate-pulse' : 'text-white'}`}>
-                            {ccTimeLeft}s
-                        </div>
+                    <div className="flex items-center gap-2">
                         {/* Last action */}
                         <AnimatePresence>
                             {room.ccLastAction && (
                                 <motion.div
-                                    initial={{ y: -20, opacity: 0 }}
-                                    animate={{ y: 0, opacity: 1 }}
-                                    exit={{ y: 20, opacity: 0 }}
-                                    className="text-right"
+                                    initial={{ x: -20, opacity: 0 }}
+                                    animate={{ x: 0, opacity: 1 }}
+                                    exit={{ x: 20, opacity: 0 }}
                                 >
                                     <div className={`px-3 py-1 rounded-lg text-sm font-bold ${
                                         room.ccLastAction.type === 'play' 
@@ -1207,6 +1203,9 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
                                 </motion.div>
                             )}
                         </AnimatePresence>
+                        <div className={`text-5xl font-mono font-bold ${ccTimeLeft <= 10 ? 'text-red-500 animate-pulse' : 'text-white'}`}>
+                            {ccTimeLeft}s
+                        </div>
                     </div>
                     {room.ccDrawStack && room.ccDrawStack > 0 && (
                         <div className="bg-red-600 px-4 py-2 rounded-xl text-white font-bold text-xl animate-bounce">
