@@ -4,8 +4,21 @@ import { Server } from 'socket.io';
 import cors from 'cors';
 import { GameManager } from './game';
 
+const CLIENT_ORIGINS = process.env.CLIENT_ORIGINS ? process.env.CLIENT_ORIGINS.split(',') : ['http://localhost:5173'];
+
+const corsOptions = {
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    if (!origin || CLIENT_ORIGINS.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+};
+
 const app = express();
-app.use(cors());
+app.use(cors(corsOptions));
 
 app.get('/', (_req, res) => {
   res.status(200).send('DanielBox server is running. Try GET /health.');
@@ -17,10 +30,7 @@ app.get('/health', (_req, res) => {
 
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: {
-    origin: "*", // Allow all origins for dev
-    methods: ["GET", "POST"]
-  }
+  cors: corsOptions
 });
 
 const gameManager = new GameManager(io);
