@@ -4,16 +4,8 @@ import { Server } from 'socket.io';
 import cors from 'cors';
 import { GameManager } from './game';
 
-const CLIENT_ORIGINS = process.env.CLIENT_ORIGINS ? process.env.CLIENT_ORIGINS.split(',') : ['http://localhost:5173'];
-
 const corsOptions = {
-  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-    if (!origin || CLIENT_ORIGINS.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: true, // Allow all origins, echo the request origin
   credentials: true,
 };
 
