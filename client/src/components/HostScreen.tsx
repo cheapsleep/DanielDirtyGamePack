@@ -1180,7 +1180,7 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
                                     animate={{ x: 0, opacity: 1 }}
                                     exit={{ x: 20, opacity: 0 }}
                                 >
-                                    <div className={`px-3 py-1 rounded-lg text-sm font-bold ${
+                                    <div className={`px-4 py-2 rounded-lg text-base font-bold ${
                                         room.ccLastAction.type === 'play' 
                                             ? 'bg-green-600/80' 
                                             : room.ccLastAction.type === 'draw'
