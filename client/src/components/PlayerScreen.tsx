@@ -640,6 +640,46 @@ export default function PlayerScreen() {
           <span className="font-mono bg-slate-800 px-2 py-1 rounded">Room: {roomCode}</span>
       </div>
 
+      {/* Player list - show during games */}
+      {room && gameState !== 'LOBBY' && gameState !== 'END' && (
+        <div className="mb-4 px-2">
+          <div className="flex flex-wrap gap-2 justify-center">
+            {room.players?.filter(p => p.isConnected || p.isBot).map((player) => {
+              const isCurrent = player.id === room.ccCurrentPlayerId;
+              const isMe = player.id === playerId;
+              const cardCount = room.ccHandCounts?.[player.id] ?? 0;
+              
+              return (
+                <div
+                  key={player.id}
+                  className={`flex items-center gap-1 px-2 py-1 rounded text-xs ${
+                    isCurrent 
+                      ? 'bg-yellow-500/20 border border-yellow-400' 
+                      : isMe 
+                        ? 'bg-blue-500/20 border border-blue-400'
+                        : 'bg-slate-700'
+                  }`}
+                >
+                  <span className={`font-bold ${isCurrent ? 'text-yellow-300' : isMe ? 'text-blue-300' : 'text-white'}`}>
+                    {player.name}
+                    {isMe && ' (You)'}
+                  </span>
+                  {isCurrent && <span className="text-yellow-400">🎯</span>}
+                  {gameState.startsWith('CC_') && (
+                    <>
+                      <span className="text-white">🃏</span>
+                      <span className={`font-bold ${cardCount <= 2 ? 'text-red-400' : 'text-white'}`}>
+                        {cardCount}
+                      </span>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <div className="flex-1 flex flex-col justify-center">
         {error && (
           <div className="w-full max-w-md mx-auto mb-6 p-4 bg-red-900/40 border border-red-600 rounded-lg text-red-200 text-center">
@@ -1567,48 +1607,6 @@ export default function PlayerScreen() {
                   </div>
                 </>
               )}
-            </div>
-
-            {/* Player list */}
-            <div className="mt-4 px-4">
-              <div className="bg-slate-800 rounded-lg p-3">
-                <h3 className="text-sm font-bold text-slate-300 mb-2 text-center">Players</h3>
-                <div className="space-y-1">
-                  {room?.ccTurnOrder?.map((turnPlayerId) => {
-                    const player = room.players?.find(p => p.id === turnPlayerId);
-                    const cardCount = room.ccHandCounts?.[turnPlayerId] ?? 0;
-                    const isCurrent = turnPlayerId === room.ccCurrentPlayerId;
-                    const isMe = turnPlayerId === playerId;
-                    
-                    return (
-                      <div
-                        key={turnPlayerId}
-                        className={`flex items-center justify-between p-2 rounded ${
-                          isCurrent 
-                            ? 'bg-yellow-500/20 border border-yellow-400' 
-                            : isMe 
-                              ? 'bg-blue-500/20 border border-blue-400'
-                              : 'bg-slate-700'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className={`font-bold text-sm ${isCurrent ? 'text-yellow-300' : isMe ? 'text-blue-300' : 'text-white'}`}>
-                            {player?.name ?? 'Unknown'}
-                            {isMe && ' (You)'}
-                          </span>
-                          {isCurrent && <span className="text-xs text-yellow-400">🎯</span>}
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <span className="text-lg">🃏</span>
-                          <span className={`text-sm font-bold ${cardCount <= 2 ? 'text-red-400' : 'text-white'}`}>
-                            {cardCount}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
             </div>
 
             {/* Draw button */}

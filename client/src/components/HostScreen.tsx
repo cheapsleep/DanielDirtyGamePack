@@ -1208,8 +1208,6 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
                                     style={{
                                         transform: `translate(${x}px, ${y}px)`
                                     }}
-                                    animate={isCurrent ? { scale: [1.1, 1.15, 1.1] } : {}}
-                                    transition={{ repeat: Infinity, duration: 1 }}
                                 >
                                     <span className={`font-bold text-sm truncate max-w-24 ${isCurrent ? 'text-yellow-300' : 'text-white'}`}>
                                         {player?.name ?? 'Unknown'}
