@@ -1183,6 +1183,39 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
                     )}
                 </div>
 
+                {/* Top: Last action */}
+                <AnimatePresence>
+                    {room.ccLastAction && (
+                        <motion.div
+                            initial={{ y: -50, opacity: 0 }}
+                            animate={{ y: 0, opacity: 1 }}
+                            exit={{ y: 50, opacity: 0 }}
+                            className="flex justify-center mb-4"
+                        >
+                            <div className={`px-6 py-3 rounded-xl text-xl font-bold ${
+                                room.ccLastAction.type === 'play' 
+                                    ? 'bg-green-600/80' 
+                                    : room.ccLastAction.type === 'draw'
+                                        ? 'bg-blue-600/80'
+                                        : 'bg-red-600/80'
+                            }`}>
+                                {room.ccLastAction.type === 'play' && (
+                                    <span>🎴 {room.ccLastAction.playerName} played a card!</span>
+                                )}
+                                {room.ccLastAction.type === 'draw' && (
+                                    <span>📥 {room.ccLastAction.playerName} drew cards!</span>
+                                )}
+                                {room.ccLastAction.type === 'timeout' && (
+                                    <span>⏱️ {room.ccLastAction.playerName} timed out! +2 cards</span>
+                                )}
+                                {room.ccLastAction.color && (
+                                    <span className="ml-2">→ {room.ccLastAction.color.toUpperCase()}</span>
+                                )}
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
                 {/* Main content: Discard pile and player ring */}
                 <div className="flex-1 flex items-center justify-center relative">
                     {/* Player ring around discard */}
@@ -1285,39 +1318,6 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
                         >
                             <div className="px-6 py-3 rounded-xl text-xl font-bold bg-purple-600 text-white">
                                 🔀 Shuffling discard pile back into deck! 🔀
-                            </div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-
-                {/* Bottom: Last action */}
-                <AnimatePresence>
-                    {room.ccLastAction && (
-                        <motion.div
-                            initial={{ y: 50, opacity: 0 }}
-                            animate={{ y: 0, opacity: 1 }}
-                            exit={{ y: -50, opacity: 0 }}
-                            className="flex justify-center mb-4"
-                        >
-                            <div className={`px-6 py-3 rounded-xl text-xl font-bold ${
-                                room.ccLastAction.type === 'play' 
-                                    ? 'bg-green-600/80' 
-                                    : room.ccLastAction.type === 'draw'
-                                        ? 'bg-blue-600/80'
-                                        : 'bg-red-600/80'
-                            }`}>
-                                {room.ccLastAction.type === 'play' && (
-                                    <span>🎴 {room.ccLastAction.playerName} played a card!</span>
-                                )}
-                                {room.ccLastAction.type === 'draw' && (
-                                    <span>📥 {room.ccLastAction.playerName} drew cards!</span>
-                                )}
-                                {room.ccLastAction.type === 'timeout' && (
-                                    <span>⏱️ {room.ccLastAction.playerName} timed out! +2 cards</span>
-                                )}
-                                {room.ccLastAction.color && (
-                                    <span className="ml-2">→ {room.ccLastAction.color.toUpperCase()}</span>
-                                )}
                             </div>
                         </motion.div>
                     )}
