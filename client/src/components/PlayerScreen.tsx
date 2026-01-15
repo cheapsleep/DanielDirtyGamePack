@@ -1537,7 +1537,7 @@ export default function PlayerScreen() {
                     Your hand ({ccHand.length} cards)
                   </div>
                   
-                  <div className="overflow-x-auto pt-6 pb-4">
+                  <div className="overflow-visible pt-6 pb-4">
                     <div className="flex gap-3 px-4 min-w-min justify-center flex-wrap">
                       <AnimatePresence mode="popLayout">
                         {ccHand.map((card, index) => {
