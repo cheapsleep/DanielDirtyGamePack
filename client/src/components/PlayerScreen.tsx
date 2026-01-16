@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { socket, socketServerUrl } from '../socket';
 
 import WoodenButton from './WoodenButton';
+import AuthHeader from './AuthHeader';
 import ScribbleCanvas, { DrawingCanvasHandle } from './DrawingCanvas';
 import CardCalamityCard, { ColorPicker, ActiveColorIndicator, CCCard } from './CardCalamityCard';
 
@@ -34,6 +35,9 @@ function DrawingCanvas({ onChange }: { onChange: (data: string) => void }) {
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     return {
       x: clientX - rect.left,
+        <div className="p-4 flex justify-end">
+          <AuthHeader />
+        </div>
       y: clientY - rect.top
     };
   };

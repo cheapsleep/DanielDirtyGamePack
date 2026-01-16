@@ -34,5 +34,7 @@ const resolvedUrl = (() => {
 export const socketServerUrl = resolvedUrl;
 
 export const socket = io(resolvedUrl, {
-    autoConnect: true
+  autoConnect: true,
+  withCredentials: true,
+  transports: ['websocket', 'polling']
 });

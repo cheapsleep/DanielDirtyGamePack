@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import WoodenButton from './WoodenButton';
+import AuthHeader from './AuthHeader';
 
 interface GameLibraryProps {
   onSelectGame: (gameId: string) => void;
@@ -96,9 +97,10 @@ export default function GameLibrary({ onSelectGame }: GameLibraryProps) {
           </svg>
           Game Library
         </h1>
-        <div className="flex gap-4">
-             {/* Join Button Removed */}
-        </div>
+           <div className="flex gap-4">
+             {/* Auth header */}
+             <AuthHeader />
+           </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-32 max-w-5xl mx-auto w-full pt-40">

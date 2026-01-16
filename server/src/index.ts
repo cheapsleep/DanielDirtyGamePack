@@ -2,15 +2,32 @@ import express from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import cookieParser from 'cookie-parser';
 import { GameManager } from './game';
+import sessionMiddleware from './session';
+import authRouter from './routes/auth';
+
+const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || process.env.APP_URL || 'http://localhost:5173'
 
 const corsOptions = {
-  origin: true, // Allow all origins, echo the request origin
+  origin: CLIENT_ORIGIN,
   credentials: true,
 };
 
 const app = express();
+app.use(helmet());
 app.use(cors(corsOptions));
+app.use(express.json());
+app.use(cookieParser());
+
+// session must be used before routes that depend on it
+app.use(sessionMiddleware);
+
+// basic rate limiter for auth-related endpoints
+const authLimiter = rateLimit({ windowMs: 60 * 1000, max: 10 });
+app.use('/api/auth', authLimiter, authRouter);
 
 app.get('/', (_req, res) => {
   res.status(200).send('DanielBox server is running. Try GET /health.');
@@ -25,10 +42,25 @@ const io = new Server(server, {
   cors: corsOptions
 });
 
+// attach session to socket handshake
+io.use((socket, next) => {
+  const req: any = socket.request;
+  sessionMiddleware(req, {} as any, next as any);
+});
+
 const gameManager = new GameManager(io);
 
 io.on('connection', (socket) => {
   console.log('A user connected:', socket.id);
+
+  // attach userId from session if available
+  try {
+    // @ts-ignore
+    const userId = socket.request.session?.userId
+    if (userId) socket.data.userId = userId
+  } catch (e) {
+    // ignore
+  }
 
   // Handle joining a room
   socket.on('join_room', (data) => {
