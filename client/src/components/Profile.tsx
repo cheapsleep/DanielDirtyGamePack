@@ -8,6 +8,18 @@ export default function Profile() {
   const [nickDraft, setNickDraft] = useState('')
   const [selectedIcon, setSelectedIcon] = useState(null as string | null)
 
+  const iconUrls = [
+    new URL('../assets/profile-icons/monster1.svg', import.meta.url).href,
+    new URL('../assets/profile-icons/monster2.svg', import.meta.url).href,
+    new URL('../assets/profile-icons/monster3.svg', import.meta.url).href,
+    new URL('../assets/profile-icons/monster4.svg', import.meta.url).href,
+    new URL('../assets/profile-icons/monster5.svg', import.meta.url).href,
+    new URL('../assets/profile-icons/monster6.svg', import.meta.url).href,
+    new URL('../assets/profile-icons/monster7.svg', import.meta.url).href,
+    new URL('../assets/profile-icons/monster8.svg', import.meta.url).href,
+    new URL('../assets/profile-icons/monster9.svg', import.meta.url).href,
+  ]
+
   useEffect(() => {
     if (!user) return
     setNickDraft(user.nickname ?? '')
@@ -108,15 +120,16 @@ export default function Profile() {
         <div className="mt-4 bg-stone-800 p-6 rounded mb-4">
           <h2 className="text-xl font-bold mb-3">Profile Icon</h2>
           <p className="text-sm text-slate-400 mb-4">Choose an avatar color. Images can be added later.</p>
-          <div className="grid grid-cols-4 sm:grid-cols-6 gap-3 max-w-md">
-            {['#ef4444','#f97316','#f59e0b','#eab308','#84cc16','#10b981','#06b6d4','#3b82f6','#6366f1','#8b5cf6','#ec4899','#64748b'].map(c => (
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 max-w-md">
+            {iconUrls.map((src, i) => (
               <button
-                key={c}
-                onClick={() => setSelectedIcon(c)}
-                className={`w-12 h-12 rounded-full border-4 ${selectedIcon === c ? 'border-white' : 'border-transparent'}`}
-                style={{ background: c }}
-                aria-label={`Choose ${c}`}
-              />
+                key={src}
+                onClick={() => setSelectedIcon(src)}
+                className={`w-12 h-12 rounded-full border-4 overflow-hidden ${selectedIcon === src ? 'border-white' : 'border-transparent'}`}
+                aria-label={`Choose icon ${i + 1}`}
+              >
+                <img src={src} alt={`icon ${i + 1}`} className="w-full h-full object-cover" />
+              </button>
             ))}
           </div>
 
