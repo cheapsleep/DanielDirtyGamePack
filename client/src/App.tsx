@@ -5,9 +5,6 @@ import PlayerScreen from './components/PlayerScreen';
 import SplashScreen from './components/SplashScreen';
 import TitleScreen from './components/TitleScreen';
 import GameLibrary from './components/GameLibrary';
-import Login from './components/Login';
-import Register from './components/Register';
-import Profile from './components/Profile';
 
 type View = 'SPLASH' | 'TITLE' | 'LIBRARY' | 'HOST' | 'PLAYER';
 
@@ -79,12 +76,6 @@ function App() {
       </div>
     );
   }
-
-  // simple pathname routing for auth pages
-  const pathname = window.location.pathname
-  if (pathname === '/login') return <Login />
-  if (pathname === '/register') return <Register />
-  if (pathname === '/profile') return <Profile />
 
   return (
     <div className="min-h-screen bg-slate-900 overflow-hidden">
