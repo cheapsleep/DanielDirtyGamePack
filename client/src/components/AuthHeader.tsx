@@ -1,4 +1,3 @@
-import React from 'react'
 import useAuth from '../hooks/useAuth'
 import WoodenButton from './WoodenButton'
 
@@ -10,15 +9,15 @@ export default function AuthHeader() {
   if (user) {
     return (
       <div className="flex gap-2">
-        <WoodenButton onClick={() => go('/profile')} variant="green">Profile</WoodenButton>
+        <WoodenButton onClick={() => go('/profile')} variant="white">Profile</WoodenButton>
       </div>
     )
   }
 
   return (
     <div className="flex gap-2">
-      <WoodenButton onClick={() => go('/login')} variant="amber">Login</WoodenButton>
-      <WoodenButton onClick={() => go('/register')} variant="emerald">Register</WoodenButton>
+      <WoodenButton onClick={() => go('/login')} variant="red">Login</WoodenButton>
+      <WoodenButton onClick={() => go('/register')} variant="white">Register</WoodenButton>
     </div>
   )
 }

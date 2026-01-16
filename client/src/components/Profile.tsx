@@ -1,9 +1,8 @@
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import useAuth from '../hooks/useAuth'
 
 export default function Profile() {
-  const { user, fetchMe, logout } = useAuth()
-  const [loading, setLoading] = useState(false)
+  const { user, logout } = useAuth()
   const [stats, setStats] = useState<any>(null)
 
   useEffect(() => {
@@ -31,7 +30,7 @@ export default function Profile() {
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold">Profile</h1>
         <div className="flex gap-2">
-          <button onClick={async () => { setLoading(true); await logout(); setLoading(false); window.location.href='/' }} className="px-3 py-1 bg-stone-700 rounded">Log out</button>
+          <button onClick={async () => { await logout(); window.location.href='/' }} className="px-3 py-1 bg-stone-700 rounded">Log out</button>
         </div>
       </div>
 
