@@ -9,7 +9,7 @@ export default function Profile() {
 
   useEffect(() => {
     if (user) {
-      setNickDraft(user.nickname ?? '')
+      setNickDraft(user.nickname ?? '');
       // fetch stats when API is available; currently placeholder
       (async () => {
         try {
