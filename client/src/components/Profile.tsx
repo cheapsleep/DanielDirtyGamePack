@@ -128,7 +128,7 @@ export default function Profile() {
                 className={`w-12 h-12 rounded-full border-4 overflow-hidden ${selectedIcon === src ? 'border-white' : 'border-transparent'}`}
                 aria-label={`Choose icon ${i + 1}`}
               >
-                <img src={src} alt={`icon ${i + 1}`} className="w-full h-full object-cover" />
+                <img src={src} alt={`icon ${i + 1}`} className="w-full h-full object-contain bg-transparent" />
               </button>
             ))}
           </div>
