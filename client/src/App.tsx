@@ -94,8 +94,12 @@ function App() {
   if (pathname === '/forgot-password') return <ForgotPassword />
   if (pathname === '/reset-password') return <ResetPassword />
 
-  // Treat `/home` as the library view but don't short-circuit rendering
-  const effectiveView: View = pathname === '/home' ? 'LIBRARY' : view;
+  // Treat `/home` as the library view, but prefer `HOST`/`PLAYER` when set so
+  // clicking PLAY can open Host/Player screens even when pathname === '/home'.
+  let effectiveView: View = view;
+  if (view !== 'HOST' && view !== 'PLAYER') {
+    effectiveView = pathname === '/home' ? 'LIBRARY' : view;
+  }
 
   return (
     <div className="min-h-screen bg-slate-900 overflow-hidden">
