@@ -12,6 +12,7 @@ model User {
   email           String   @unique
   username        String   @unique
   nickname        String?
+  profileIcon     String?
   passwordHash    String
   role            String   @default("user")
   emailVerifiedAt DateTime?

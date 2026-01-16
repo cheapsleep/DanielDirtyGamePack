@@ -681,7 +681,10 @@ export default function PlayerScreen() {
                 </svg>
               </button>
             )}
-            <span className="font-bold text-pink-500">{playerName}</span>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full" style={{ background: (user?.profileIcon ?? '#444') }} />
+              <span className="font-bold text-pink-500">{playerName}</span>
+            </div>
           </div>
           <span className="font-mono bg-slate-800 px-2 py-1 rounded">Room: {roomCode}</span>
       </div>

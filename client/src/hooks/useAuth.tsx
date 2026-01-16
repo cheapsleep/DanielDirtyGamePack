@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 
-export type User = { id: string; email: string; username: string; nickname?: string | null; emailVerifiedAt?: string | null }
+export type User = { id: string; email: string; username: string; nickname?: string | null; emailVerifiedAt?: string | null; profileIcon?: string | null }
 
 export default function useAuth() {
   const [user, setUser] = useState<User | null>(null)
@@ -12,7 +12,9 @@ export default function useAuth() {
       const res = await fetch(`${import.meta.env.VITE_SERVER_URL ?? ''}/api/auth/me`, { credentials: 'include' })
       if (res.ok) {
         const data = await res.json()
-        setUser(data)
+        // Merge locally-stored profile icon (client-side placeholder) with server user data
+        const localIcon = typeof window !== 'undefined' ? localStorage.getItem('profileIcon') : null
+        setUser({ ...data, profileIcon: localIcon ?? undefined })
       } else {
         setUser(null)
       }
@@ -36,7 +38,8 @@ export default function useAuth() {
     })
     if (!res.ok) throw new Error('Invalid credentials')
     const data = await res.json()
-    setUser(data)
+    const localIcon = typeof window !== 'undefined' ? localStorage.getItem('profileIcon') : null
+    setUser({ ...data, profileIcon: localIcon ?? undefined })
     return data
   }, [])
 
@@ -52,7 +55,8 @@ export default function useAuth() {
       throw new Error(err.error || 'Registration failed')
     }
     const data = await res.json()
-    setUser(data)
+    const localIcon = typeof window !== 'undefined' ? localStorage.getItem('profileIcon') : null
+    setUser({ ...data, profileIcon: localIcon ?? undefined })
     return data
   }, [])
 
