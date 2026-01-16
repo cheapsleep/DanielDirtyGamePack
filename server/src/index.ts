@@ -8,6 +8,7 @@ import cookieParser from 'cookie-parser';
 import { GameManager } from './game';
 import sessionMiddleware from './session';
 import authRouter from './routes/auth';
+import debugRouter from './routes/debug';
 
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || process.env.APP_URL || 'http://localhost:5173'
 
@@ -41,6 +42,9 @@ const resetLimiter = rateLimit({
 app.use('/api/auth/request-password-reset', resetLimiter);
 
 app.use('/api/auth', authLimiter, authRouter);
+
+// Debug routes (send test email) — protected by DEBUG_EMAIL_SECRET header/body
+app.use('/api/debug', debugRouter);
 
 app.get('/', (_req, res) => {
   res.status(200).send('DanielBox server is running. Try GET /health.');
