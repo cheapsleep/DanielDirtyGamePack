@@ -745,7 +745,7 @@ export default function PlayerScreen() {
                 <div className="mt-4">
                   <div className="max-w-md mx-auto">
                     <WoodenButton onClick={async () => {
-                      const newNick = prompt('Enter new nickname (max 24 chars)', (user?.nickname ?? playerName) || '')
+                      const newNick = window.prompt('Enter new nickname (max 24 chars)', (user?.nickname ?? playerName) || '')
                       if (!newNick) return
                       try {
                         // emit to server to update room player name
