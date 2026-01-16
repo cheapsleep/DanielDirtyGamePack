@@ -11,7 +11,7 @@ model User {
   id              String   @id @default(uuid())
   email           String   @unique
   username        String   @unique
-  nickname        String?  @default(null)
+  nickname        String?
   passwordHash    String
   role            String   @default("user")
   emailVerifiedAt DateTime?
