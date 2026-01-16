@@ -575,14 +575,17 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
           <div className="w-full max-w-4xl text-center">
             <h2 className="text-3xl mb-8">Waiting for players...</h2>
             <div className="grid grid-cols-4 gap-4 mb-12">
-              {room.players.map((p) => (
-                <div
-                  key={p.id}
-                  className={`p-4 rounded-lg text-xl font-bold ${p.isConnected ? 'bg-indigo-600' : 'bg-red-900 opacity-50'}`}
-                >
-                  {p.name}
-                </div>
-              ))}
+                            {room.players.map((p) => (
+                                <div
+                                    key={p.id}
+                                    className={`p-4 rounded-lg text-xl font-bold ${p.isConnected ? 'bg-indigo-600' : 'bg-red-900 opacity-50'}`}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-full" style={{ background: (p as any).profileIcon ?? '#444' }} />
+                                        <div>{p.name}</div>
+                                    </div>
+                                </div>
+                            ))}
               {room.players.length === 0 && <p className="col-span-4 text-slate-500">No players yet</p>}
             </div>
             <div className="text-slate-400 text-lg">The first player to join becomes the controller.</div>
@@ -1608,9 +1611,10 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
                                                     }`}
                                                 >
                                                     <div className="flex justify-between items-center">
-                                                        <span className="font-bold">
-                                                            {idx === 0 ? '👑' : `#${idx + 1}`} {player?.name}
-                                                        </span>
+                                                        <div className="flex items-center gap-3">
+                                                          <div className="w-10 h-10 rounded-full" style={{ background: (player as any)?.profileIcon ?? '#444' }} />
+                                                          <span className="font-bold">{idx === 0 ? '👑' : `#${idx + 1}`} {player?.name}</span>
+                                                        </div>
                                                         <span className="text-green-400 font-bold">{score}</span>
                                                     </div>
                                                     {roundPoints > 0 && (
@@ -1639,10 +1643,13 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
                 <div className="space-y-4">
                     {room.players.sort((a,b) => b.score - a.score).map((p, idx) => (
                         <div key={p.id} className={`flex justify-between items-center p-6 rounded-xl ${idx === 0 ? 'bg-yellow-900/50 border-2 border-yellow-500' : 'bg-slate-800'}`}>
-                            <div className="flex items-center gap-4">
-                                <span className="text-3xl font-bold w-12">{idx + 1}</span>
-                                <span className="text-2xl">{p.name}</span>
-                            </div>
+                                                        <div className="flex items-center gap-4">
+                                                                <span className="text-3xl font-bold w-12">{idx + 1}</span>
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className="w-12 h-12 rounded-full" style={{ background: (p as any).profileIcon ?? '#444' }} />
+                                                                    <span className="text-2xl">{p.name}</span>
+                                                                </div>
+                                                        </div>
                             <span className="text-3xl font-bold text-green-400">
                                 {isPatented ? '$' : ''}{p.score}{isScribble ? ' pts' : ''}
                             </span>

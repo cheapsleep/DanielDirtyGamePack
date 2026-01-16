@@ -1,5 +1,6 @@
 import { Server, Socket } from 'socket.io';
 import { v4 as uuidv4 } from 'uuid';
+import { prisma } from './db'
 import { nastyPrompts, nastyAnswers } from './nastyPrompts';
 import { autismQuizQuestions, generateCertificateSVG, generateMostAutisticCertificateSVG } from './autismQuiz';
 import { generateWordOptions, isCloseGuess, isCorrectGuess, generateWordHint } from './scribbleWords';
@@ -24,6 +25,7 @@ interface Player {
   socketId: string;
   score: number;
   isConnected: boolean;
+  profileIcon?: string | null;
   isBot?: boolean;
   answers: Record<string, string>; // round -> answer
 }
@@ -326,7 +328,7 @@ export class GameManager {
     console.log(`Room created: ${roomCode} by ${socket.id}`);
   }
 
-  handleJoin(
+  async handleJoin(
     socket: Socket,
     data: { roomCode?: string; playerName?: string; isHost?: boolean; playerId?: string; hostKey?: string }
   ) {
@@ -377,11 +379,21 @@ export class GameManager {
 
       const existingById = playerId ? room.players.find(p => p.id === playerId) : undefined;
       if (existingById) {
-        existingById.socketId = socket.id;
-        existingById.isConnected = true;
-        if (!room.controllerPlayerId && !existingById.isBot) room.controllerPlayerId = existingById.id;
-        socket.emit('joined', { roomCode: room.code, playerId: existingById.id, gameId: room.gameId });
-      } else {
+          existingById.socketId = socket.id;
+          existingById.isConnected = true;
+          // refresh profileIcon from DB if available
+          try {
+            // @ts-ignore
+            const uid = socket.data?.userId
+            if (uid) {
+              const u = await prisma.user.findUnique({ where: { id: uid } })
+              if (u) existingById.profileIcon = u.profileIcon ?? null
+            }
+          } catch (e) {}
+
+          if (!room.controllerPlayerId && !existingById.isBot) room.controllerPlayerId = existingById.id;
+          socket.emit('joined', { roomCode: room.code, playerId: existingById.id, gameId: room.gameId });
+        } else {
         const existingByName = room.players.find(p => p.name === playerName);
         if (existingByName && existingByName.isConnected && !existingByName.isBot) {
           socket.emit('error', { message: 'That name is already taken in this room' });
@@ -400,8 +412,19 @@ export class GameManager {
             socketId: socket.id,
             score: 0,
             isConnected: true,
-            answers: {}
+            answers: {},
+            profileIcon: null
           };
+          // if this socket is authenticated, pull user's profileIcon
+          try {
+            // @ts-ignore
+            const uid = socket.data?.userId
+            if (uid) {
+              const u = await prisma.user.findUnique({ where: { id: uid } })
+              if (u) newPlayer.profileIcon = u.profileIcon ?? null
+            }
+          } catch (e) {}
+
           room.players.push(newPlayer);
           if (!room.controllerPlayerId) room.controllerPlayerId = newPlayer.id;
           socket.emit('joined', { roomCode: room.code, playerId: newPlayer.id, gameId: room.gameId });
@@ -2872,7 +2895,7 @@ export class GameManager {
     return {
       code: room.code,
       gameId: room.gameId,
-      players: room.players.map(p => ({ name: p.name, score: p.score, isConnected: p.isConnected, id: p.id, isBot: p.isBot })),
+      players: room.players.map(p => ({ name: p.name, score: p.score, isConnected: p.isConnected, id: p.id, isBot: p.isBot, profileIcon: p.profileIcon ?? null })),
       controllerPlayerId: room.controllerPlayerId,
       state: room.state,
       currentRound: room.currentRound,

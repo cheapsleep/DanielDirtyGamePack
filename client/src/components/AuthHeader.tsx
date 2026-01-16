@@ -2,14 +2,14 @@ import useAuth from '../hooks/useAuth'
 import WoodenButton from './WoodenButton'
 
 export default function AuthHeader() {
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
 
   const go = (path: string) => { window.location.pathname = path }
 
   if (user) {
     return (
       <div className="flex gap-2">
-        <WoodenButton onClick={() => go('/profile')} variant="white">Profile</WoodenButton>
+        <WoodenButton onClick={async () => { await logout(); window.location.href = '/home' }} variant="white">Log out</WoodenButton>
       </div>
     )
   }

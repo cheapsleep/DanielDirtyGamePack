@@ -713,10 +713,13 @@ export default function PlayerScreen() {
                         : 'bg-slate-700'
                   }`}
                 >
-                  <span className={`font-bold ${isCurrent ? 'text-yellow-300' : isMe ? 'text-blue-300' : 'text-white'}`}>
-                    {player.name}
-                    {isMe && ' (You)'}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-full" style={{ background: (player as any).profileIcon ?? '#444' }} />
+                    <span className={`font-bold ${isCurrent ? 'text-yellow-300' : isMe ? 'text-blue-300' : 'text-white'}`}>
+                      {player.name}
+                      {isMe && ' (You)'}
+                    </span>
+                  </div>
                   {isCurrent && <span className="text-yellow-400">🎯</span>}
                   {gameState.startsWith('CC_') && cardCount > 0 && (
                     <>

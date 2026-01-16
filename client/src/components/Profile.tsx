@@ -31,7 +31,8 @@ export default function Profile() {
   }
 
   return (
-    <div className="min-h-screen p-8 text-white">
+    <div className="min-h-screen p-4 sm:p-8 text-white flex justify-center">
+      <div className="w-full max-w-2xl">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
         <div className="flex items-center gap-4">
           <div className="w-20 h-20 rounded-full flex items-center justify-center" style={{ background: selectedIcon ?? '#444' }}>
@@ -42,8 +43,8 @@ export default function Profile() {
             <div className="text-sm text-slate-400">Manage your account and appearance</div>
           </div>
         </div>
-        <div className="flex gap-2">
-          <button onClick={() => { window.location.pathname = '/home' }} className="px-3 py-1 bg-stone-700 rounded">Back</button>
+          <div className="flex gap-2">
+          <button onClick={() => { window.location.href = 'https://danieldgp.com/join' }} className="px-3 py-1 bg-stone-700 rounded">Back</button>
           {!user?.emailVerifiedAt && (
             <button
               onClick={async () => {
@@ -98,10 +99,10 @@ export default function Profile() {
         </div>
       )}
 
-      <div className="mt-6 bg-stone-800 p-6 rounded max-w-2xl">
+      <div className="mt-6 bg-stone-800 p-6 rounded">
         <h2 className="text-xl font-bold mb-3">Profile Icon</h2>
         <p className="text-sm text-slate-400 mb-4">Choose an avatar color. Images can be added later.</p>
-        <div className="grid grid-cols-6 gap-3 max-w-md">
+        <div className="grid grid-cols-4 sm:grid-cols-6 gap-3 max-w-md">
           {['#ef4444','#f97316','#f59e0b','#eab308','#84cc16','#10b981','#06b6d4','#3b82f6','#6366f1','#8b5cf6','#ec4899','#64748b'].map(c => (
             <button
               key={c}
@@ -112,8 +113,8 @@ export default function Profile() {
             />
           ))}
         </div>
-        <div className="mt-4 flex gap-2">
-          <button onClick={async () => {
+        <div className="mt-4 flex flex-col sm:flex-row gap-2">
+          <button className="w-full sm:w-auto" onClick={async () => {
             try {
               const res = await fetch(`${import.meta.env.VITE_SERVER_URL ?? ''}/api/auth/profile`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ profileIcon: selectedIcon }) })
               if (res.ok) {
@@ -129,7 +130,7 @@ export default function Profile() {
               alert('Failed to save profile icon')
             }
           }} className="px-4 py-2 bg-pink-500 rounded">Save Icon</button>
-          <button onClick={async () => { setSelectedIcon(user.profileIcon ?? null); try { const res = await fetch(`${import.meta.env.VITE_SERVER_URL ?? ''}/api/auth/profile`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ profileIcon: null }) }); if (res.ok) { localStorage.removeItem('profileIcon'); try { await fetchMe() } catch {} } } catch {} }} className="px-4 py-2 bg-stone-700 rounded">Reset</button>
+          <button className="w-full sm:w-auto" onClick={async () => { setSelectedIcon(user.profileIcon ?? null); try { const res = await fetch(`${import.meta.env.VITE_SERVER_URL ?? ''}/api/auth/profile`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ profileIcon: null }) }); if (res.ok) { localStorage.removeItem('profileIcon'); try { await fetchMe() } catch {} } } catch {} }} className="px-4 py-2 bg-stone-700 rounded">Reset</button>
         </div>
       </div>
 
