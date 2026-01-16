@@ -17,6 +17,8 @@ const corsOptions = {
 };
 
 const app = express();
+// Behind Cloudflare / proxy — trust the proxy so req.ip and X-Forwarded-* are respected
+app.set('trust proxy', true);
 app.use(helmet());
 app.use(cors(corsOptions));
 app.use(express.json());
