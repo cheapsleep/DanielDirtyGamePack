@@ -31,6 +31,21 @@ export default function Profile() {
         <h1 className="text-3xl font-bold">Profile</h1>
         <div className="flex gap-2">
           <button onClick={() => { window.location.pathname = '/home' }} className="px-3 py-1 bg-stone-700 rounded">Back</button>
+          {!user?.emailVerifiedAt && (
+            <button
+              onClick={async () => {
+                try {
+                  await fetch(`${import.meta.env.VITE_SERVER_URL ?? ''}/api/auth/resend-verification`, { method: 'POST', credentials: 'include' })
+                  alert('Verification email resent (if your email exists)')
+                } catch (e) {
+                  alert('Failed to resend verification email')
+                }
+              }}
+              className="px-3 py-1 bg-amber-500 rounded text-black"
+            >
+              Resend verification
+            </button>
+          )}
           <button onClick={async () => { await logout(); window.location.href='/home' }} className="px-3 py-1 bg-stone-700 rounded">Log out</button>
         </div>
       </div>

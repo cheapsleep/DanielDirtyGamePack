@@ -135,6 +135,41 @@ router.post('/request-password-reset', async (req, res) => {
   }
 })
 
+// Resend verification: if session present, resend for current user; otherwise accept { email }
+router.post('/resend-verification', async (req, res) => {
+  try {
+    // @ts-ignore
+    const sessionUserId = req.session?.userId
+    let user = null
+
+    if (sessionUserId) {
+      user = await prisma.user.findUnique({ where: { id: sessionUserId } })
+    } else {
+      const { email } = req.body
+      if (!email) return res.status(200).json({ ok: true }) // don't reveal
+      user = await prisma.user.findUnique({ where: { email } })
+    }
+
+    if (!user) return res.status(200).json({ ok: true })
+    if (user.emailVerifiedAt) return res.status(200).json({ ok: true })
+
+    // create a new token and send verification
+    const token = makeToken()
+    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24) // 24h
+    await prisma.token.create({ data: { userId: user.id, token, type: 'VERIFICATION', expiresAt } })
+    try {
+      await sendVerificationEmail(user.email, token)
+    } catch (e) {
+      console.warn('Failed to resend verification email', e)
+    }
+
+    return res.json({ ok: true })
+  } catch (err) {
+    console.error(err)
+    return res.status(500).json({ error: 'server error' })
+  }
+})
+
 router.post('/reset-password', async (req, res) => {
   try {
     const { token, newPassword } = req.body
