@@ -35,9 +35,6 @@ function DrawingCanvas({ onChange }: { onChange: (data: string) => void }) {
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     return {
       x: clientX - rect.left,
-        <div className="p-4 flex justify-end">
-          <AuthHeader />
-        </div>
       y: clientY - rect.top
     };
   };
@@ -642,6 +639,10 @@ export default function PlayerScreen() {
             <span className="font-bold text-pink-500">{playerName}</span>
           </div>
           <span className="font-mono bg-slate-800 px-2 py-1 rounded">Room: {roomCode}</span>
+      </div>
+
+      <div className="p-2 flex justify-end">
+        <AuthHeader />
       </div>
 
       {/* Player list - show during games */}
