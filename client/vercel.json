@@ -16,5 +16,22 @@
       "source": "/join/:code/",
       "destination": "/index.html"
     }
+    ,
+    {
+      "source": "/login",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/register",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/profile",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/((?!api).*)",
+      "destination": "/index.html"
+    }
   ]
 }
