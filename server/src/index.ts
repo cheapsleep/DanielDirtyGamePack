@@ -27,8 +27,19 @@ app.use(cookieParser());
 // session must be used before routes that depend on it
 app.use(sessionMiddleware);
 
-// basic rate limiter for auth-related endpoints
-const authLimiter = rateLimit({ windowMs: 60 * 1000, max: 10 });
+// general rate limiter for auth-related endpoints (slightly higher to reduce accidental 429s)
+const authLimiter = rateLimit({ windowMs: 60 * 1000, max: 30 });
+
+// route-specific limiter for password-reset requests to prevent abuse (hourly window)
+const resetLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 5,
+  message: { error: 'Too many password reset requests, try again later' }
+});
+
+// apply resetLimiter for the specific endpoint path before mounting the general auth router
+app.use('/api/auth/request-password-reset', resetLimiter);
+
 app.use('/api/auth', authLimiter, authRouter);
 
 app.get('/', (_req, res) => {

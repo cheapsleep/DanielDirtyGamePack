@@ -58,7 +58,8 @@ function App() {
   };
 
   const handleTitleContinue = () => {
-    setView('LIBRARY');
+    // Navigate to /home so the library is at danieldgp.com/home
+    window.location.pathname = '/home';
   };
 
   const handleSelectGame = (gameId: string) => {
