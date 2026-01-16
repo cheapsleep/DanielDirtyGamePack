@@ -9,6 +9,7 @@ import { GameManager } from './game';
 import sessionMiddleware from './session';
 import authRouter from './routes/auth';
 import debugRouter from './routes/debug';
+import statsRouter from './routes/stats';
 
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || process.env.APP_URL || 'http://localhost:5173'
 
@@ -43,6 +44,9 @@ const resetLimiter = rateLimit({
 app.use('/api/auth/request-password-reset', resetLimiter);
 
 app.use('/api/auth', authLimiter, authRouter);
+
+// Player stats endpoints
+app.use('/api/stats', statsRouter);
 
 // Debug routes (send test email) — protected by DEBUG_EMAIL_SECRET header/body
 app.use('/api/debug', debugRouter);

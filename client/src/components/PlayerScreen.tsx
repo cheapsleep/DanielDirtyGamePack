@@ -288,6 +288,27 @@ export default function PlayerScreen() {
         setDpSelected('');
         if (nextRoom?.state !== 'DP_PICK') setDpChoices([]);
       }
+
+      // When the game ends, report stats for the current player (if present)
+      if (stateChanged && nextRoom?.state === 'END') {
+        (async () => {
+          try {
+            const me = nextRoom?.players?.find((p: any) => p.id === playerId)
+            if (!me) return
+            const scores = Array.isArray(nextRoom.players) ? nextRoom.players.map((p: any) => Number(p.score || 0)) : [Number(me.score || 0)]
+            const max = scores.length ? Math.max(...scores) : (me.score || 0)
+            const won = Number(me.score || 0) >= max && max > 0
+            await fetch(`${import.meta.env.VITE_SERVER_URL ?? ''}/api/stats/report`, {
+              method: 'POST',
+              credentials: 'include',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ game: nextRoom.gameId ?? gameId, score: Number(me.score || 0), won, metadata: { roomCode: nextRoom.code } })
+            })
+          } catch (e) {
+            // ignore reporting errors
+          }
+        })()
+      }
     };
     socket.on('room_update', onRoomUpdate);
 

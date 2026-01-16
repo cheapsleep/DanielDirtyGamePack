@@ -10,7 +10,7 @@ export default function Profile() {
       // fetch stats when API is available; currently placeholder
       (async () => {
         try {
-          const res = await fetch(`${import.meta.env.VITE_SERVER_URL ?? ''}/api/users/${user.id}/stats`, { credentials: 'include' })
+          const res = await fetch(`${import.meta.env.VITE_SERVER_URL ?? ''}/api/stats/me`, { credentials: 'include' })
           if (res.ok) setStats(await res.json())
         } catch {
           setStats(null)
@@ -58,8 +58,19 @@ export default function Profile() {
 
       <div className="mt-6">
         <h2 className="text-xl font-bold mb-2">Stats</h2>
-        {stats ? (
-          <pre className="bg-stone-900 p-4 rounded text-sm">{JSON.stringify(stats, null, 2)}</pre>
+        {stats && stats.length > 0 ? (
+          <div className="grid grid-cols-1 gap-3">
+            {stats.map((s: any) => (
+              <div key={s.id} className="bg-stone-900 p-4 rounded">
+                <div><strong>Game:</strong> {s.game}</div>
+                <div><strong>Sessions:</strong> {s.sessions}</div>
+                <div><strong>Wins:</strong> {s.wins}</div>
+                <div><strong>Total score:</strong> {s.totalScore}</div>
+                <div><strong>Best score:</strong> {s.bestScore}</div>
+                {s.metadata && <div className="text-sm text-slate-400 mt-2">{JSON.stringify(s.metadata)}</div>}
+              </div>
+            ))}
+          </div>
         ) : (
           <div className="text-slate-400">No stats available yet.</div>
         )}
