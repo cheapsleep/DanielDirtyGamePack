@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { socket, socketServerUrl } from '../socket';
+import useAuth from '../hooks/useAuth'
 
 import WoodenButton from './WoodenButton';
 import AuthHeader from './AuthHeader';
@@ -181,6 +182,7 @@ interface RoomPublicState {
 }
 
 export default function PlayerScreen() {
+  const { user, fetchMe } = useAuth()
   const [joined, setJoined] = useState(false);
   const [roomCode, setRoomCode] = useState('');
   const [playerName, setPlayerName] = useState('');
@@ -481,7 +483,11 @@ export default function PlayerScreen() {
 
   const handleJoin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!roomCode || !playerName) return;
+    if (!roomCode) return;
+
+    // Determine the name we'll join with (prefer typed name, then account nickname/username)
+    const joinName = playerName && playerName.trim() ? playerName.trim() : (user ? (user.nickname ?? user.username) : '')
+    if (!joinName) return;
 
     let rememberedPlayerId: string | null = null;
     try {
@@ -492,10 +498,11 @@ export default function PlayerScreen() {
 
     socket.emit('join_room', {
       roomCode,
-      playerName,
+      playerName: joinName,
       isHost: false,
       playerId: rememberedPlayerId ?? undefined
     });
+    setPlayerName(joinName)
   };
 
   const handleStartGame = () => {
@@ -580,19 +587,23 @@ export default function PlayerScreen() {
               autoCapitalize="characters"
             />
           </div>
-          <div>
-            <label className="block text-sm font-bold mb-2 text-slate-400">NAME</label>
-            <input 
-              type="text" 
-              maxLength={12}
-              value={playerName}
-              onChange={e => setPlayerName(e.target.value)}
-              className="w-full p-4 bg-slate-800 rounded-lg text-2xl font-bold text-center focus:ring-2 focus:ring-blue-500 outline-none"
-              placeholder="ENTER NAME"
-              autoComplete="off"
-              autoCorrect="off"
-            />
-          </div>
+          { !user ? (
+            <div>
+              <label className="block text-sm font-bold mb-2 text-slate-400">NAME</label>
+              <input 
+                type="text" 
+                maxLength={12}
+                value={playerName}
+                onChange={e => setPlayerName(e.target.value)}
+                className="w-full p-4 bg-slate-800 rounded-lg text-2xl font-bold text-center focus:ring-2 focus:ring-blue-500 outline-none"
+                placeholder="ENTER NAME"
+                autoComplete="off"
+                autoCorrect="off"
+              />
+            </div>
+          ) : (
+            <div className="text-sm text-slate-400">Logged in as <strong>{user.nickname ?? user.username}</strong>. Your account name will be used.</div>
+          )}
           {error && <p className="text-red-500 text-center">{error}</p>}
           <WoodenButton 
             type="submit"
@@ -601,6 +612,17 @@ export default function PlayerScreen() {
           >
             PLAY
           </WoodenButton>
+
+          <div className="mt-3 flex flex-col gap-3">
+            {!user ? (
+              <>
+                <WoodenButton onClick={() => window.location.pathname = '/login'} variant="red" className="w-full">Login</WoodenButton>
+                <WoodenButton onClick={() => window.location.pathname = '/register'} variant="red" className="w-full">Register</WoodenButton>
+              </>
+            ) : (
+              <WoodenButton onClick={() => window.location.pathname = '/profile'} variant="red" className="w-full">Profile</WoodenButton>
+            )}
+          </div>
         </form>
       </div>
     );
@@ -665,7 +687,7 @@ export default function PlayerScreen() {
       </div>
 
       <div className="p-2 flex justify-end">
-        <AuthHeader />
+        {!(joined && (room?.state === 'LOBBY') && user) && <AuthHeader />}
       </div>
 
       {/* Player list - show during games */}
@@ -719,6 +741,27 @@ export default function PlayerScreen() {
             <div className="text-center">
                 <h2 className="text-3xl font-bold mb-4 text-pink-500">You're In!</h2>
                 <p className="text-slate-400 text-lg">Watch the main screen for the room.</p>
+                {/* Change nickname button for players while in lobby (allowed until game starts) */}
+                <div className="mt-4">
+                  <div className="max-w-md mx-auto">
+                    <WoodenButton onClick={async () => {
+                      const newNick = prompt('Enter new nickname (max 24 chars)', (user?.nickname ?? playerName) || '')
+                      if (!newNick) return
+                      try {
+                        // emit to server to update room player name
+                        socket.emit('change_nickname', newNick.slice(0,24))
+                        // if logged in, update persistent nickname as well
+                        if (user) {
+                          await fetch(`${import.meta.env.VITE_SERVER_URL ?? ''}/api/auth/nickname`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nickname: newNick.slice(0,24) }) })
+                          try { await fetchMe() } catch {}
+                        }
+                        setPlayerName(newNick.slice(0,24))
+                      } catch (e) {
+                        // ignore
+                      }
+                    }} variant="red">Change Nickname</WoodenButton>
+                  </div>
+                </div>
                 {isController ? (
                   <div className="mt-8 w-full max-w-md mx-auto">
                     <div className="text-slate-300 text-lg mb-4">You are the controller.</div>

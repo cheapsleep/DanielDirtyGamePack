@@ -103,6 +103,15 @@ io.on('connection', (socket) => {
     gameManager.handleGameAction(socket, data);
   });
 
+  // Allow clients to request a nickname change for their player in the current room
+  socket.on('change_nickname', (newName: string) => {
+    try {
+      gameManager.handleChangeNickname(socket, String(newName ?? ''))
+    } catch (e) {
+      // ignore
+    }
+  });
+
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
     gameManager.handleDisconnect(socket);

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 
-export type User = { id: string; email: string; username: string; emailVerifiedAt?: string | null }
+export type User = { id: string; email: string; username: string; nickname?: string | null; emailVerifiedAt?: string | null }
 
 export default function useAuth() {
   const [user, setUser] = useState<User | null>(null)

@@ -31,7 +31,7 @@ router.post('/register', async (req, res) => {
       console.warn('Failed to send verification email', e)
     }
 
-    res.status(201).json({ id: user.id, email: user.email, username: user.username })
+    res.status(201).json({ id: user.id, email: user.email, username: user.username, nickname: user.nickname ?? null })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'server error' })
@@ -92,7 +92,7 @@ router.post('/login', async (req, res) => {
     req.session.userId = user.id
     await prisma.user.update({ where: { id: user.id }, data: { updatedAt: new Date() } })
 
-    res.json({ id: user.id, email: user.email, username: user.username })
+    res.json({ id: user.id, email: user.email, username: user.username, nickname: user.nickname ?? null })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'server error' })
@@ -195,8 +195,25 @@ router.get('/me', async (req, res) => {
     const userId = req.session?.userId
     if (!userId) return res.status(401).json({ error: 'unauthenticated' })
 
-    const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, email: true, username: true, emailVerifiedAt: true } })
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, email: true, username: true, nickname: true, emailVerifiedAt: true } })
     res.json(user)
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'server error' })
+  }
+})
+
+// update nickname for current user
+router.patch('/nickname', async (req, res) => {
+  try {
+    // @ts-ignore
+    const userId = req.session?.userId
+    if (!userId) return res.status(401).json({ error: 'unauthenticated' })
+    const { nickname } = req.body
+    if (typeof nickname !== 'string') return res.status(400).json({ error: 'invalid nickname' })
+    const trimmed = nickname.trim().slice(0, 24)
+    const updated = await prisma.user.update({ where: { id: userId }, data: { nickname: trimmed } })
+    res.json({ id: updated.id, nickname: updated.nickname })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'server error' })

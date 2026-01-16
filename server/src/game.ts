@@ -157,6 +157,25 @@ export class GameManager {
     } catch (_) {}
   }
 
+  // Allow a socket to request a nickname change for their player while in LOBBY
+  public handleChangeNickname(socket: Socket, newName: string) {
+    const roomCode = this.socketRoomMap.get(socket.id)
+    if (!roomCode) return
+    const room = this.rooms.get(roomCode)
+    if (!room) return
+    if (room.state !== 'LOBBY') return
+
+    const player = room.players.find(p => p.socketId === socket.id)
+    if (!player) return
+
+    const clean = String(newName ?? '').trim().slice(0, 24)
+    if (!clean) return
+
+    player.name = clean
+    // Broadcast updated room state
+    this.io.to(roomCode).emit('room_update', this.getRoomPublicState(room))
+  }
+
   private startAQTimer(room: Room) {
     // Clear any existing timer
     this.clearAQTimer(room.code);

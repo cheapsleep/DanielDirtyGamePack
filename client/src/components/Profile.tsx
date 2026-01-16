@@ -4,9 +4,12 @@ import useAuth from '../hooks/useAuth'
 export default function Profile() {
   const { user, logout } = useAuth()
   const [stats, setStats] = useState<any>(null)
+  const [editingNick, setEditingNick] = useState(false)
+  const [nickDraft, setNickDraft] = useState('')
 
   useEffect(() => {
     if (user) {
+      setNickDraft(user.nickname ?? '')
       // fetch stats when API is available; currently placeholder
       (async () => {
         try {
@@ -52,9 +55,31 @@ export default function Profile() {
 
       <div className="bg-stone-800 p-6 rounded">
         <p><strong>Username:</strong> {user.username}</p>
+        <p><strong>Nickname:</strong> {user.nickname ?? '(none)'} {editingNick ? null : (<button onClick={() => setEditingNick(true)} className="ml-2 text-sm text-slate-300 underline">Edit</button>)}</p>
         <p><strong>Email:</strong> {user.email}</p>
         <p><strong>Verified:</strong> {user.emailVerifiedAt ? 'Yes' : 'No' }</p>
       </div>
+
+      {editingNick && (
+        <div className="mt-4 max-w-md">
+          <label className="block text-sm text-slate-400 mb-1">Nickname</label>
+          <input value={nickDraft} onChange={e => setNickDraft(e.target.value)} className="w-full p-2 rounded bg-stone-800" />
+          <div className="flex gap-2 mt-2">
+            <button onClick={async () => {
+              try {
+                const res = await fetch(`${import.meta.env.VITE_SERVER_URL ?? ''}/api/auth/nickname`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nickname: nickDraft }) })
+                if (res.ok) {
+                  setEditingNick(false)
+                  window.location.reload()
+                } else {
+                  alert('Failed to update nickname')
+                }
+              } catch (e) { alert('Failed to update nickname') }
+            }} className="px-3 py-1 bg-pink-500 rounded">Save</button>
+            <button onClick={() => { setEditingNick(false); setNickDraft(user.nickname ?? '') }} className="px-3 py-1 bg-stone-700 rounded">Cancel</button>
+          </div>
+        </div>
+      )}
 
       <div className="mt-6">
         <h2 className="text-xl font-bold mb-2">Stats</h2>
