@@ -36,8 +36,9 @@ transporter.verify()
 export async function sendVerificationEmail(email: string, token: string) {
   // Link to client-side verification page which will call the API
   const url = `${appUrl}/verify?token=${encodeURIComponent(token)}`
+  const fromDomain = process.env.SMTP_FROM ? process.env.SMTP_FROM : `no-reply@${new URL(appUrl).hostname.replace(/^www\./, '')}`
   const mail = {
-    from: `"Daniel's Dirty Game Pack" <no-reply@${new URL(appUrl).hostname}>`,
+    from: `"Daniel's Dirty Game Pack" <${fromDomain}>`,
     to: email,
     subject: 'Verify your email',
     text: `Please verify your email by visiting: ${url}`,
@@ -60,8 +61,9 @@ export async function sendVerificationEmail(email: string, token: string) {
 
 export async function sendPasswordResetEmail(email: string, token: string) {
   const url = `${appUrl}/reset-password?token=${encodeURIComponent(token)}`
+  const fromDomain = process.env.SMTP_FROM ? process.env.SMTP_FROM : `no-reply@${new URL(appUrl).hostname.replace(/^www\./, '')}`
   const mail = {
-    from: `"Daniel's Dirty Game Pack" <no-reply@${new URL(appUrl).hostname}>`,
+    from: `"Daniel's Dirty Game Pack" <${fromDomain}>`,
     to: email,
     subject: 'Password reset',
     text: `Reset your password: ${url}`,
@@ -83,8 +85,9 @@ export async function sendPasswordResetEmail(email: string, token: string) {
 }
 
 export async function sendTestEmail(to: string) {
+  const fromDomain = process.env.SMTP_FROM ? process.env.SMTP_FROM : `no-reply@${new URL(appUrl).hostname.replace(/^www\./, '')}`
   const mail = {
-    from: `"Daniel's Dirty Game Pack" <no-reply@${new URL(appUrl).hostname}>`,
+    from: `"Daniel's Dirty Game Pack" <${fromDomain}>`,
     to,
     subject: 'Test email from DanielBox',
     text: 'This is a test email to verify SMTP configuration.'
