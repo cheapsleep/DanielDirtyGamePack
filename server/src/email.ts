@@ -18,7 +18,8 @@ const transporter = nodemailer.createTransport({
 })
 
 export async function sendVerificationEmail(email: string, token: string) {
-  const url = `${appUrl}/api/auth/verify?token=${encodeURIComponent(token)}`
+  // Link to client-side verification page which will call the API
+  const url = `${appUrl}/verify?token=${encodeURIComponent(token)}`
   const info = await transporter.sendMail({
     from: `"Daniel's Dirty Game Pack" <no-reply@${new URL(appUrl).hostname}>`,
     to: email,

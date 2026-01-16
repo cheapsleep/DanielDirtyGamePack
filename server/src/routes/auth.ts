@@ -57,6 +57,25 @@ router.get('/verify', async (req, res) => {
   }
 })
 
+// POST /verify: accepts a token in body and returns JSON (used by SPA)
+router.post('/verify', async (req, res) => {
+  try {
+    const { token } = req.body
+    if (!token) return res.status(400).json({ error: 'missing token' })
+
+    const t = await prisma.token.findUnique({ where: { token } , include: { user: true } })
+    if (!t || t.type !== 'VERIFICATION' || t.expiresAt < new Date()) return res.status(400).json({ error: 'invalid or expired token' })
+
+    await prisma.user.update({ where: { id: t.userId }, data: { emailVerifiedAt: new Date() } })
+    await prisma.token.delete({ where: { id: t.id } })
+
+    res.json({ ok: true })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'server error' })
+  }
+})
+
 router.post('/login', async (req, res) => {
   try {
     const { emailOrUsername, password } = req.body

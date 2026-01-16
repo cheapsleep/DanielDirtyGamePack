@@ -8,6 +8,9 @@ import GameLibrary from './components/GameLibrary';
 import Login from './components/Login';
 import Register from './components/Register';
 import Profile from './components/Profile';
+import Verify from './components/Verify';
+import ForgotPassword from './components/ForgotPassword';
+import ResetPassword from './components/ResetPassword';
 
 type View = 'SPLASH' | 'TITLE' | 'LIBRARY' | 'HOST' | 'PLAYER';
 
@@ -68,8 +71,9 @@ function App() {
   };
 
   const handleBackToLibrary = () => {
-    setView('LIBRARY');
-    setSelectedGame(null);
+    // Always navigate to /home so users skip splash/title flows on return
+    try { setSelectedGame(null); } catch {}
+    window.location.pathname = '/home';
   };
 
   if (isJoin) {
@@ -80,11 +84,23 @@ function App() {
     );
   }
 
-  // simple pathname routing for auth pages
+  // simple pathname routing for auth & utility pages
   const pathname = window.location.pathname
   if (pathname === '/login') return <Login />
   if (pathname === '/register') return <Register />
   if (pathname === '/profile') return <Profile />
+  if (pathname === '/verify') return <Verify />
+  if (pathname === '/forgot-password') return <ForgotPassword />
+  if (pathname === '/reset-password') return <ResetPassword />
+
+  // If the user navigates to /home always show the library
+  if (pathname === '/home') {
+    return (
+      <div className="min-h-screen bg-slate-900 overflow-hidden">
+        <GameLibrary onSelectGame={handleSelectGame} onJoinGame={handleJoinGame} />
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-slate-900 overflow-hidden">

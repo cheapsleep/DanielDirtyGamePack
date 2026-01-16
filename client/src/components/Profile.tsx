@@ -30,7 +30,8 @@ export default function Profile() {
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold">Profile</h1>
         <div className="flex gap-2">
-          <button onClick={async () => { await logout(); window.location.href='/' }} className="px-3 py-1 bg-stone-700 rounded">Log out</button>
+          <button onClick={() => { window.location.pathname = '/home' }} className="px-3 py-1 bg-stone-700 rounded">Back</button>
+          <button onClick={async () => { await logout(); window.location.href='/home' }} className="px-3 py-1 bg-stone-700 rounded">Log out</button>
         </div>
       </div>
 

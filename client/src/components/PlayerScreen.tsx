@@ -617,6 +617,8 @@ export default function PlayerScreen() {
         // ignore
       }
     }
+    // Navigate back to home so users skip splash/title flows
+    try { window.location.pathname = '/home'; } catch {}
   };
 
   const isInGame = gameState !== 'LOBBY' && gameState !== 'END';

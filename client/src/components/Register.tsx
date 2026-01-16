@@ -12,7 +12,7 @@ export default function Register() {
     e.preventDefault()
     try {
       await register(email, username, password)
-      window.location.href = '/'
+      window.location.href = '/home'
     } catch (err: any) {
       setError(err.message || 'Registration failed')
     }

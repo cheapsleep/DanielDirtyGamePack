@@ -11,7 +11,7 @@ export default function Login() {
     e.preventDefault()
     try {
       await login(emailOrUsername, password)
-      window.location.href = '/'
+      window.location.href = '/home'
     } catch (err: any) {
       setError(err.message || 'Login failed')
     }
@@ -33,6 +33,9 @@ export default function Login() {
         <div className="flex gap-2">
           <button type="submit" className="px-4 py-2 bg-amber-500 rounded text-black font-bold">Log in</button>
           <button type="button" className="px-4 py-2 bg-slate-600 rounded" onClick={() => window.location.href = '/register'}>Register</button>
+        </div>
+        <div className="mt-3 text-sm text-slate-300">
+          <button className="underline" onClick={() => window.location.href = '/forgot-password'}>Forgot your password?</button>
         </div>
       </form>
     </div>
