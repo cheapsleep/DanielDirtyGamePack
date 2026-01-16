@@ -59,6 +59,17 @@ app.get('/health', (_req, res) => {
   res.status(200).json({ ok: true });
 });
 
+// Generic error handler to log stack traces for debugging (helps identify 500 causes)
+// Keep this after all routes are mounted.
+app.use((err: any, _req: any, res: any, _next: any) => {
+  console.error('Unhandled error:', err && err.stack ? err.stack : err);
+  try {
+    res.status(500).json({ error: 'server error' });
+  } catch {
+    // ignore
+  }
+});
+
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: corsOptions
