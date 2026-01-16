@@ -94,37 +94,31 @@ function App() {
   if (pathname === '/forgot-password') return <ForgotPassword />
   if (pathname === '/reset-password') return <ResetPassword />
 
-  // If the user navigates to /home always show the library
-  if (pathname === '/home') {
-    return (
-      <div className="min-h-screen bg-slate-900 overflow-hidden">
-        <GameLibrary onSelectGame={handleSelectGame} onJoinGame={handleJoinGame} />
-      </div>
-    )
-  }
+  // Treat `/home` as the library view but don't short-circuit rendering
+  const effectiveView: View = pathname === '/home' ? 'LIBRARY' : view;
 
   return (
     <div className="min-h-screen bg-slate-900 overflow-hidden">
-      {view === 'SPLASH' && (
+      {effectiveView === 'SPLASH' && (
         <SplashScreen onComplete={handleSplashComplete} />
       )}
 
-      {view === 'TITLE' && (
+      {effectiveView === 'TITLE' && (
         <TitleScreen onContinue={handleTitleContinue} />
       )}
 
-      {view === 'LIBRARY' && (
+      {effectiveView === 'LIBRARY' && (
         <GameLibrary 
             onSelectGame={handleSelectGame} 
             onJoinGame={handleJoinGame} 
         />
       )}
 
-      {view === 'HOST' && (
+      {effectiveView === 'HOST' && (
         <HostScreen onBack={handleBackToLibrary} gameId={selectedGame ?? 'nasty-libs'} />
       )}
 
-      {view === 'PLAYER' && (
+      {effectiveView === 'PLAYER' && (
         <PlayerScreen />
       )}
     </div>
