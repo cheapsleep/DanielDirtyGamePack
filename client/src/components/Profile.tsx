@@ -20,6 +20,13 @@ export default function Profile() {
     new URL('../assets/profile-icons/monster9.svg', import.meta.url).href,
   ]
 
+  const bgStyle = (icon: string | null) => {
+    if (!icon) return { background: '#444' }
+    // color strings like #fff should be used as background color
+    if (/^(#|rgba?\()/.test(icon)) return { background: icon }
+    return { backgroundImage: `url(${icon})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+  }
+
   useEffect(() => {
     if (!user) return
     setNickDraft(user.nickname ?? '')
@@ -47,8 +54,8 @@ export default function Profile() {
       <div className="w-full max-w-2xl">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
           <div className="flex items-center gap-4">
-            <div className="w-20 h-20 rounded-full flex items-center justify-center" style={{ background: selectedIcon ?? '#444' }}>
-              <span className="text-2xl font-bold opacity-80">{(user.username || '').charAt(0).toUpperCase()}</span>
+            <div className="w-20 h-20 rounded-full flex items-center justify-center" style={bgStyle(selectedIcon)}>
+              {!selectedIcon && <span className="text-2xl font-bold opacity-80">{(user.username || '').charAt(0).toUpperCase()}</span>}
             </div>
             <div>
               <h1 className="text-3xl font-bold">Profile</h1>
@@ -79,8 +86,8 @@ export default function Profile() {
 
         <div className="bg-stone-800 p-6 rounded mb-4">
           <div className="flex items-center gap-4 mb-3">
-            <div className="w-14 h-14 rounded-full flex items-center justify-center" style={{ background: selectedIcon ?? '#444' }}>
-              <span className="text-xl font-bold opacity-90">{(user.username || '').charAt(0).toUpperCase()}</span>
+            <div className="w-14 h-14 rounded-full flex items-center justify-center" style={bgStyle(selectedIcon)}>
+              {!selectedIcon && <span className="text-xl font-bold opacity-90">{(user.username || '').charAt(0).toUpperCase()}</span>}
             </div>
             <div>
               <p className="font-bold">{user.username}</p>
@@ -125,7 +132,7 @@ export default function Profile() {
               <button
                 key={src}
                 onClick={() => setSelectedIcon(src)}
-                className={`w-12 h-12 rounded-full border-4 overflow-hidden ${selectedIcon === src ? 'border-white' : 'border-transparent'}`}
+                className={`w-12 h-12 rounded-full border-4 overflow-hidden p-1 ${selectedIcon === src ? 'border-white' : 'border-transparent'}`}
                 aria-label={`Choose icon ${i + 1}`}
               >
                 <img src={src} alt={`icon ${i + 1}`} className="w-full h-full object-contain bg-transparent" />
