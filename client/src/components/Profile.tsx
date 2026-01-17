@@ -20,18 +20,32 @@ export default function Profile() {
     new URL('../assets/profile-icons/monster9.svg', import.meta.url).href,
   ]
 
+  const iconMap = Object.fromEntries(iconUrls.map(u => [u.split('/').pop() || u, u]))
+
+  const isLikelyUrl = (s: string) => /^(data:|https?:|\/|blob:)/i.test(s) || s.includes('profile-icons') || /\.svg$/.test(s)
+
+  const resolveIcon = (icon: string | null) => {
+    if (!icon) return null
+    if (isLikelyUrl(icon)) return icon
+    // try mapping by basename (e.g., 'monster1' or 'monster1.svg')
+    const base = icon.split('/').pop() || icon
+    if (iconMap[base]) return iconMap[base]
+    // fallback: return as-is
+    return icon
+  }
+
   const bgStyle = (icon: string | null) => {
-    if (!icon) return { background: '#444' }
-    // color strings like #fff should be used as background color
-    if (/^(#|rgba?\()/.test(icon)) return { background: icon }
-    return { backgroundImage: `url(${icon})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+    const resolved = resolveIcon(icon)
+    if (!resolved) return { background: '#444' }
+    if (/^(#|rgba?\()/.test(resolved)) return { background: resolved }
+    return { backgroundImage: `url(${resolved})`, backgroundSize: 'contain', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }
   }
 
   useEffect(() => {
     if (!user) return
     setNickDraft(user.nickname ?? '')
     const stored = typeof window !== 'undefined' ? localStorage.getItem('profileIcon') : null
-    setSelectedIcon(user.profileIcon ?? stored)
+    setSelectedIcon(resolveIcon(user.profileIcon ?? stored))
 
     ;(async () => {
       try {
