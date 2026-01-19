@@ -5,6 +5,14 @@ import { socket, socketServerUrl } from '../socket';
 import DrawingCanvas, { useStrokeReceiver } from './DrawingCanvas';
 import CardCalamityCard, { ActiveColorIndicator, DirectionIndicator, CCCard } from './CardCalamityCard';
 
+// Helper to render profile icon strings correctly as either a color or an image URL/data-uri
+function makeBg(v?: string | null) {
+    if (!v) return { background: '#444' } as React.CSSProperties;
+    const isUrl = /^(data:|https?:|\/|blob:)/i.test(v) || v.includes('profile-icons') || /\.(png|svg)$/i.test(v);
+    if (isUrl) return { backgroundImage: `url(${v})`, backgroundSize: 'contain', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' } as React.CSSProperties;
+    return { background: v } as React.CSSProperties;
+}
+
 interface Player {
   id: string;
   name: string;
@@ -581,7 +589,7 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
                                     className={`p-4 rounded-lg text-xl font-bold ${p.isConnected ? 'bg-indigo-600' : 'bg-red-900 opacity-50'}`}
                                 >
                                     <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-full" style={{ background: (p as any).profileIcon ?? '#444' }} />
+                                        <div className="w-10 h-10 rounded-full" style={makeBg((p as any).profileIcon ?? '#444')} />
                                         <div>{p.name}</div>
                                     </div>
                                 </div>

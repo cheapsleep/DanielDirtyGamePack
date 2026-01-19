@@ -102,6 +102,14 @@ function DrawingCanvas({ onChange }: { onChange: (data: string) => void }) {
   );
 }
 
+// Helper to render profile icon strings correctly as either a color or an image URL/data-uri
+function makeBg(v?: string | null) {
+  if (!v) return { background: '#444' } as React.CSSProperties;
+  const isUrl = /^(data:|https?:|\/|blob:)/i.test(v) || v.includes('profile-icons') || /\.(png|svg)$/i.test(v);
+  if (isUrl) return { backgroundImage: `url(${v})`, backgroundSize: 'contain', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' } as React.CSSProperties;
+  return { background: v } as React.CSSProperties;
+}
+
 type GameState =
   | 'LOBBY'
   | 'NL_PROMPT_SUBMIT'
@@ -682,7 +690,7 @@ export default function PlayerScreen() {
               </button>
             )}
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full" style={{ background: (user?.profileIcon ?? '#444') }} />
+              <div className="w-8 h-8 rounded-full" style={makeBg(user?.profileIcon ?? '#444')} />
               <span className="font-bold text-pink-500">{playerName}</span>
             </div>
           </div>
@@ -714,7 +722,7 @@ export default function PlayerScreen() {
                   }`}
                 >
                   <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-full" style={{ background: (player as any).profileIcon ?? '#444' }} />
+                    <div className="w-6 h-6 rounded-full" style={makeBg((player as any).profileIcon ?? '#444')} />
                     <span className={`font-bold ${isCurrent ? 'text-yellow-300' : isMe ? 'text-blue-300' : 'text-white'}`}>
                       {player.name}
                       {isMe && ' (You)'}
