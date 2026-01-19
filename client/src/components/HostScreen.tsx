@@ -1276,7 +1276,7 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
                                     )}
                                 </motion.div>
                             );
-                        })}
+                        })()}
                     </div>
 
                     {/* Center: Discard pile */}
