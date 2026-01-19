@@ -1231,24 +1231,26 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
                 <div className="flex-1 flex items-center justify-center relative">
                     {/* Player ring around discard */}
                     <div className="absolute inset-0 flex items-center justify-center">
-                        {room.players.filter(p => p.isConnected || p.isBot).sort((a, b) => a.id.localeCompare(b.id)).map((player, idx) => {
-                            const playerId = player.id;
-                            const isCurrent = playerId === room.ccCurrentPlayerId;
-                            const cardCount = room.ccHandCounts?.[playerId] ?? 0;
+                        {(() => {
                             const activePlayers = room.players.filter(p => p.isConnected || p.isBot);
-                            const angle = (idx / activePlayers.length) * 2 * Math.PI - Math.PI / 2;
-                            const radius = Math.min(250, window.innerWidth * 0.22);
-                            const x = Math.cos(angle) * radius;
-                            const y = Math.sin(angle) * radius;
-                            
-                            return (
-                                <motion.div
-                                    key={playerId}
-                                    className="absolute flex items-center gap-2"
-                                    style={{
-                                        transform: `translate(${x}px, ${y}px)`
-                                    }}
-                                >
+                            return activePlayers.map((player, idx) => {
+                                const playerId = player.id;
+                                const isCurrent = playerId === room.ccCurrentPlayerId;
+                                const cardCount = room.ccHandCounts?.[playerId] ?? 0;
+                                // Start at left (π) and step clockwise around the circle
+                                const angle = Math.PI - (idx / activePlayers.length) * 2 * Math.PI;
+                                const radius = Math.min(250, window.innerWidth * 0.22);
+                                const x = Math.cos(angle) * radius;
+                                const y = Math.sin(angle) * radius;
+
+                                return (
+                                    <motion.div
+                                        key={playerId}
+                                        className="absolute flex items-center gap-2"
+                                        style={{
+                                            transform: `translate(${x}px, ${y}px)`
+                                        }}
+                                    >
                                     <div className={`flex flex-col items-center gap-1 p-3 rounded-xl transition-all ${
                                         isCurrent 
                                             ? 'bg-yellow-500/30 border-2 border-yellow-400 scale-110' 
