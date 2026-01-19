@@ -1229,6 +1229,14 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
 
                 {/* Main content: Discard pile and player ring */}
                 <div className="flex-1 flex items-center justify-center relative">
+                    {/* Ad slot (guests only) */}
+                    {/* AdsBanner will lazy-load provider script when visible */}
+                    <div className="absolute top-4 left-0 right-0 flex justify-center z-0 pointer-events-none">
+                        <div className="pointer-events-auto w-full max-w-4xl px-2">
+                            {/* Dynamically import AdsBanner only in-browser to avoid SSR build issues */}
+                            <ClientOnlyAds slot="host_lobby_top" />
+                        </div>
+                    </div>
                     {/* Player ring around discard */}
                     <div className="absolute inset-0 flex items-center justify-center">
                         {room.players.filter(p => p.isConnected || p.isBot).map((player, idx, arr) => {

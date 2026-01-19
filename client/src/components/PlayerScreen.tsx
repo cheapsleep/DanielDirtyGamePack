@@ -5,6 +5,7 @@ import useAuth from '../hooks/useAuth'
 
 import WoodenButton from './WoodenButton';
 import AuthHeader from './AuthHeader';
+import AdsBanner from './AdsBanner';
 import ScribbleCanvas, { DrawingCanvasHandle } from './DrawingCanvas';
 import CardCalamityCard, { ColorPicker, ActiveColorIndicator, CCCard } from './CardCalamityCard';
 
@@ -693,6 +694,9 @@ export default function PlayerScreen() {
               <div className="w-8 h-8 rounded-full" style={makeBg(user?.profileIcon ?? '#444')} />
               <span className="font-bold text-pink-500">{playerName}</span>
             </div>
+          </div>
+          <div className="ml-4">
+            <AdsBanner slot="player_top" />
           </div>
           <span className="font-mono bg-slate-800 px-2 py-1 rounded">Room: {roomCode}</span>
       </div>
