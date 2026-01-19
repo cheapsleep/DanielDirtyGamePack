@@ -106,7 +106,7 @@ function DrawingCanvas({ onChange }: { onChange: (data: string) => void }) {
 function makeBg(v?: string | null) {
   if (!v) return { background: '#444' } as React.CSSProperties;
   const isUrl = /^(data:|https?:|\/|blob:)/i.test(v) || v.includes('profile-icons') || /\.(png|svg)$/i.test(v);
-  if (isUrl) return { backgroundImage: `url(${v})`, backgroundSize: 'contain', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' } as React.CSSProperties;
+  if (isUrl) return { backgroundImage: `url(${v})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' } as React.CSSProperties;
   return { background: v } as React.CSSProperties;
 }
 

@@ -38,7 +38,7 @@ export default function Profile() {
     const resolved = resolveIcon(icon)
     if (!resolved) return { background: '#444' }
     if (/^(#|rgba?\()/.test(resolved)) return { background: resolved }
-    return { backgroundImage: `url(${resolved})`, backgroundSize: 'contain', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }
+    return { backgroundImage: `url(${resolved})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }
   }
 
   useEffect(() => {
@@ -146,10 +146,10 @@ export default function Profile() {
               <button
                 key={src}
                 onClick={() => setSelectedIcon(src)}
-                className={`w-12 h-12 rounded-full border-4 overflow-hidden p-1 ${selectedIcon === src ? 'border-white' : 'border-transparent'}`}
+                className={`w-12 h-12 rounded-full border-4 overflow-hidden p-0 ${selectedIcon === src ? 'border-white' : 'border-transparent'}`}
                 aria-label={`Choose icon ${i + 1}`}
               >
-                <img src={src} alt={`icon ${i + 1}`} className="w-full h-full object-contain bg-transparent" />
+                <img src={src} alt={`icon ${i + 1}`} className="w-full h-full object-cover bg-transparent" />
               </button>
             ))}
           </div>
