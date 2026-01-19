@@ -4,6 +4,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { socket, socketServerUrl } from '../socket';
 import DrawingCanvas, { useStrokeReceiver } from './DrawingCanvas';
 import CardCalamityCard, { ActiveColorIndicator, DirectionIndicator, CCCard } from './CardCalamityCard';
+import ClientOnlyAds from './ClientOnlyAds';
 
 // Helper to render profile icon strings correctly as either a color or an image URL/data-uri
 function makeBg(v?: string | null) {
