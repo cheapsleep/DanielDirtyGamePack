@@ -1231,52 +1231,50 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
                 <div className="flex-1 flex items-center justify-center relative">
                     {/* Player ring around discard */}
                     <div className="absolute inset-0 flex items-center justify-center">
-                        {(() => {
-                            const activePlayers = room.players.filter(p => p.isConnected || p.isBot);
-                            return activePlayers.map((player, idx) => {
-                                const playerId = player.id;
-                                const isCurrent = playerId === room.ccCurrentPlayerId;
-                                const cardCount = room.ccHandCounts?.[playerId] ?? 0;
-                                // Start at left (π) and step clockwise around the circle
-                                const angle = Math.PI - (idx / activePlayers.length) * 2 * Math.PI;
-                                const radius = Math.min(250, window.innerWidth * 0.22);
-                                const x = Math.cos(angle) * radius;
-                                const y = Math.sin(angle) * radius;
+                        {room.players.filter(p => p.isConnected || p.isBot).map((player, idx, arr) => {
+                            const playerId = player.id;
+                            const isCurrent = playerId === room.ccCurrentPlayerId;
+                            const cardCount = room.ccHandCounts?.[playerId] ?? 0;
+                            // Start at left (π) and step clockwise around the circle
+                            const angle = Math.PI - (idx / arr.length) * 2 * Math.PI;
+                            const radius = Math.min(250, window.innerWidth * 0.22);
+                            const x = Math.cos(angle) * radius;
+                            const y = Math.sin(angle) * radius;
 
-                                return (
-                                    <motion.div
-                                        key={playerId}
-                                        className="absolute flex items-center gap-2"
-                                        style={{
-                                            transform: `translate(${x}px, ${y}px)`
-                                        }}
-                                    >
-                                    <div className={`flex flex-col items-center gap-1 p-3 rounded-xl transition-all ${
-                                        isCurrent 
-                                            ? 'bg-yellow-500/30 border-2 border-yellow-400 scale-110' 
-                                            : 'bg-slate-800/70'
-                                    }`}>
-                                        <span className={`font-bold text-sm truncate max-w-24 ${isCurrent ? 'text-yellow-300' : 'text-white'}`}>
-                                            {player?.name ?? 'Unknown'}
+                            return (
+                                <motion.div
+                                    key={playerId}
+                                    className="absolute flex items-center gap-2"
+                                    style={{
+                                        transform: `translate(${x}px, ${y}px)`
+                                    }}
+                                >
+                                <div className={`flex flex-col items-center gap-1 p-3 rounded-xl transition-all ${
+                                    isCurrent 
+                                        ? 'bg-yellow-500/30 border-2 border-yellow-400 scale-110' 
+                                        : 'bg-slate-800/70'
+                                }`}>
+                                    <span className={`font-bold text-sm truncate max-w-24 ${isCurrent ? 'text-yellow-300' : 'text-white'}`}>
+                                        {player?.name ?? 'Unknown'}
+                                    </span>
+                                    <div className="flex items-center gap-1">
+                                        <span className="text-2xl">🃏</span>
+                                        <span className={`text-xl font-bold ${cardCount <= 2 ? 'text-red-400' : 'text-white'}`}>
+                                            {cardCount}
                                         </span>
-                                        <div className="flex items-center gap-1">
-                                            <span className="text-2xl">🃏</span>
-                                            <span className={`text-xl font-bold ${cardCount <= 2 ? 'text-red-400' : 'text-white'}`}>
-                                                {cardCount}
-                                            </span>
-                                        </div>
-                                        {isCurrent && room.state === 'CC_PICK_COLOR' && (
-                                            <span className="text-xs text-yellow-400 animate-pulse">Picking color...</span>
-                                        )}
                                     </div>
-                                    {isCurrent && room.ccDirection && (
-                                        <span className="text-yellow-400 text-xl">
-                                            {room.ccDirection === 1 ? '↻' : '↺'}
-                                        </span>
+                                    {isCurrent && room.state === 'CC_PICK_COLOR' && (
+                                        <span className="text-xs text-yellow-400 animate-pulse">Picking color...</span>
                                     )}
-                                </motion.div>
-                            );
-                        })()}
+                                </div>
+                                {isCurrent && room.ccDirection && (
+                                    <span className="text-yellow-400 text-xl">
+                                        {room.ccDirection === 1 ? '↻' : '↺'}
+                                    </span>
+                                )}
+                            </motion.div>
+                            )
+                        })}
                     </div>
 
                     {/* Center: Discard pile */}
