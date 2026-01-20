@@ -376,15 +376,22 @@ function getUnusedTemplateIndex(usedIndices) {
  */
 function generatePromptSetFromTemplate(templateIndex, playerCount) {
     const template = promptTemplates[templateIndex % promptTemplates.length];
-    const shuffledScrambles = [...template.scrambles].sort(() => Math.random() - 0.5);
+    // Shuffle all scrambles and the base to create a pool of goofy prompts
+    const allPrompts = [...template.scrambles, template.base].sort(() => Math.random() - 0.5);
+    // Randomly select one as the real prompt
+    const realPromptIndex = Math.floor(Math.random() * allPrompts.length);
+    const realPrompt = allPrompts[realPromptIndex];
+    // Use the remaining prompts as variants
+    const variants = allPrompts.filter((_, index) => index !== realPromptIndex);
+    // If we need more variants than available, repeat some
     const neededVariants = playerCount - 1;
-    const variants = [];
+    const finalVariants = [];
     for (let i = 0; i < neededVariants; i++) {
-        variants.push(shuffledScrambles[i % shuffledScrambles.length]);
+        finalVariants.push(variants[i % variants.length]);
     }
     return {
-        realPrompt: template.base,
-        variants
+        realPrompt,
+        variants: finalVariants
     };
 }
 exports.TEMPLATE_COUNT = promptTemplates.length;

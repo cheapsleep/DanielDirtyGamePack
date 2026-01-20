@@ -11,10 +11,15 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.GameManager = void 0;
 const uuid_1 = require("uuid");
+const db_1 = require("./db");
 const nastyPrompts_1 = require("./nastyPrompts");
 const autismQuiz_1 = require("./autismQuiz");
 const scribbleWords_1 = require("./scribbleWords");
 const sssPrompts_1 = require("./sssPrompts");
+// Helper to create a Calamity card (+128)
+function createCalamityCard() {
+    return { id: (0, uuid_1.v4)(), color: null, type: 'calamity', value: 128 };
+}
 class GameManager {
     constructor(io) {
         var _a, _b;
@@ -45,6 +50,26 @@ class GameManager {
             }
         }
         catch (_) { }
+    }
+    // Allow a socket to request a nickname change for their player while in LOBBY
+    handleChangeNickname(socket, newName) {
+        const roomCode = this.socketRoomMap.get(socket.id);
+        if (!roomCode)
+            return;
+        const room = this.rooms.get(roomCode);
+        if (!room)
+            return;
+        if (room.state !== 'LOBBY')
+            return;
+        const player = room.players.find(p => p.socketId === socket.id);
+        if (!player)
+            return;
+        const clean = String(newName !== null && newName !== void 0 ? newName : '').trim().slice(0, 24);
+        if (!clean)
+            return;
+        player.name = clean;
+        // Broadcast updated room state
+        this.io.to(roomCode).emit('room_update', this.getRoomPublicState(room));
     }
     startAQTimer(room) {
         var _a;
@@ -188,120 +213,145 @@ class GameManager {
         console.log(`Room created: ${roomCode} by ${socket.id}`);
     }
     handleJoin(socket, data) {
-        var _a, _b, _c, _d, _e, _f;
-        const roomCode = String((_a = data === null || data === void 0 ? void 0 : data.roomCode) !== null && _a !== void 0 ? _a : '').trim().toUpperCase();
-        const playerName = String((_b = data === null || data === void 0 ? void 0 : data.playerName) !== null && _b !== void 0 ? _b : '').trim();
-        const isHost = Boolean(data === null || data === void 0 ? void 0 : data.isHost);
-        const playerId = (data === null || data === void 0 ? void 0 : data.playerId) ? String(data.playerId) : undefined;
-        const hostKey = (data === null || data === void 0 ? void 0 : data.hostKey) ? String(data.hostKey) : undefined;
-        if (!roomCode) {
-            socket.emit('error', { message: 'Room code is required' });
-            return;
-        }
-        const room = this.rooms.get(roomCode);
-        if (!room) {
-            socket.emit('error', { message: 'Room not found' });
-            return;
-        }
-        if (!isHost && socket.id === room.hostSocketId) {
-            socket.emit('error', { message: 'Host cannot join as a player' });
-            return;
-        }
-        if (isHost) {
-            if (!hostKey || hostKey !== room.hostKey) {
-                socket.emit('error', { message: 'Invalid host key' });
+        return __awaiter(this, void 0, void 0, function* () {
+            var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
+            const roomCode = String((_a = data === null || data === void 0 ? void 0 : data.roomCode) !== null && _a !== void 0 ? _a : '').trim().toUpperCase();
+            const playerName = String((_b = data === null || data === void 0 ? void 0 : data.playerName) !== null && _b !== void 0 ? _b : '').trim();
+            const isHost = Boolean(data === null || data === void 0 ? void 0 : data.isHost);
+            const playerId = (data === null || data === void 0 ? void 0 : data.playerId) ? String(data.playerId) : undefined;
+            const hostKey = (data === null || data === void 0 ? void 0 : data.hostKey) ? String(data.hostKey) : undefined;
+            if (!roomCode) {
+                socket.emit('error', { message: 'Room code is required' });
                 return;
             }
-            room.hostSocketId = socket.id;
-            room.hostConnected = true;
-            // Clear any pending host-disconnect auto-close timer
-            try {
-                const pending = this.hostDisconnectTimers.get(room.code);
-                if (pending) {
-                    clearTimeout(pending);
-                    this.hostDisconnectTimers.delete(room.code);
-                }
-            }
-            catch (_) { }
-            socket.emit('host_joined', { roomCode: room.code, gameId: room.gameId });
-        }
-        else {
-            // Player join
-            if (!playerName) {
-                socket.emit('error', { message: 'Name is required' });
+            const room = this.rooms.get(roomCode);
+            if (!room) {
+                socket.emit('error', { message: 'Room not found' });
                 return;
             }
-            const existingById = playerId ? room.players.find(p => p.id === playerId) : undefined;
-            if (existingById) {
-                existingById.socketId = socket.id;
-                existingById.isConnected = true;
-                if (!room.controllerPlayerId && !existingById.isBot)
-                    room.controllerPlayerId = existingById.id;
-                socket.emit('joined', { roomCode: room.code, playerId: existingById.id, gameId: room.gameId });
+            if (!isHost && socket.id === room.hostSocketId) {
+                socket.emit('error', { message: 'Host cannot join as a player' });
+                return;
             }
-            else {
-                const existingByName = room.players.find(p => p.name === playerName);
-                if (existingByName && existingByName.isConnected && !existingByName.isBot) {
-                    socket.emit('error', { message: 'That name is already taken in this room' });
+            if (isHost) {
+                if (!hostKey || hostKey !== room.hostKey) {
+                    socket.emit('error', { message: 'Invalid host key' });
                     return;
                 }
-                if (existingByName && !existingByName.isConnected && !existingByName.isBot) {
-                    existingByName.socketId = socket.id;
-                    existingByName.isConnected = true;
-                    if (!room.controllerPlayerId)
-                        room.controllerPlayerId = existingByName.id;
-                    socket.emit('joined', { roomCode: room.code, playerId: existingByName.id, gameId: room.gameId });
+                room.hostSocketId = socket.id;
+                room.hostConnected = true;
+                // Clear any pending host-disconnect auto-close timer
+                try {
+                    const pending = this.hostDisconnectTimers.get(room.code);
+                    if (pending) {
+                        clearTimeout(pending);
+                        this.hostDisconnectTimers.delete(room.code);
+                    }
+                }
+                catch (_) { }
+                socket.emit('host_joined', { roomCode: room.code, gameId: room.gameId });
+            }
+            else {
+                // Player join
+                if (!playerName) {
+                    socket.emit('error', { message: 'Name is required' });
+                    return;
+                }
+                const existingById = playerId ? room.players.find(p => p.id === playerId) : undefined;
+                if (existingById) {
+                    existingById.socketId = socket.id;
+                    existingById.isConnected = true;
+                    // refresh profileIcon from DB if available
+                    try {
+                        // @ts-ignore
+                        const uid = (_c = socket.data) === null || _c === void 0 ? void 0 : _c.userId;
+                        if (uid) {
+                            const u = yield db_1.prisma.user.findUnique({ where: { id: uid } });
+                            if (u)
+                                existingById.profileIcon = (_d = u.profileIcon) !== null && _d !== void 0 ? _d : null;
+                        }
+                    }
+                    catch (e) { }
+                    if (!room.controllerPlayerId && !existingById.isBot)
+                        room.controllerPlayerId = existingById.id;
+                    socket.emit('joined', { roomCode: room.code, playerId: existingById.id, gameId: room.gameId });
                 }
                 else {
-                    const newPlayer = {
-                        id: (0, uuid_1.v4)(),
-                        name: playerName,
-                        socketId: socket.id,
-                        score: 0,
-                        isConnected: true,
-                        answers: {}
-                    };
-                    room.players.push(newPlayer);
-                    if (!room.controllerPlayerId)
-                        room.controllerPlayerId = newPlayer.id;
-                    socket.emit('joined', { roomCode: room.code, playerId: newPlayer.id, gameId: room.gameId });
+                    const existingByName = room.players.find(p => p.name === playerName);
+                    if (existingByName && existingByName.isConnected && !existingByName.isBot) {
+                        socket.emit('error', { message: 'That name is already taken in this room' });
+                        return;
+                    }
+                    if (existingByName && !existingByName.isConnected && !existingByName.isBot) {
+                        existingByName.socketId = socket.id;
+                        existingByName.isConnected = true;
+                        if (!room.controllerPlayerId)
+                            room.controllerPlayerId = existingByName.id;
+                        socket.emit('joined', { roomCode: room.code, playerId: existingByName.id, gameId: room.gameId });
+                    }
+                    else {
+                        const newPlayer = {
+                            id: (0, uuid_1.v4)(),
+                            name: playerName,
+                            socketId: socket.id,
+                            score: 0,
+                            isConnected: true,
+                            answers: {},
+                            profileIcon: null
+                        };
+                        // if this socket is authenticated, pull user's profileIcon
+                        try {
+                            // @ts-ignore
+                            const uid = (_e = socket.data) === null || _e === void 0 ? void 0 : _e.userId;
+                            if (uid) {
+                                const u = yield db_1.prisma.user.findUnique({ where: { id: uid } });
+                                if (u)
+                                    newPlayer.profileIcon = (_f = u.profileIcon) !== null && _f !== void 0 ? _f : null;
+                            }
+                        }
+                        catch (e) { }
+                        room.players.push(newPlayer);
+                        if (!room.controllerPlayerId)
+                            room.controllerPlayerId = newPlayer.id;
+                        socket.emit('joined', { roomCode: room.code, playerId: newPlayer.id, gameId: room.gameId });
+                    }
                 }
             }
-        }
-        this.socketRoomMap.set(socket.id, roomCode);
-        socket.join(roomCode);
-        // Notify everyone in the room
-        this.io.to(roomCode).emit('room_update', this.getRoomPublicState(room));
-        // If game is in AQ_QUESTION state, send the current question to the joining player
-        if (room.state === 'AQ_QUESTION' && room.aqCurrentQuestion) {
-            const questionIndex = room.aqCurrentQuestion - 1;
-            const questions = (_c = room.aqShuffledQuestions) !== null && _c !== void 0 ? _c : autismQuiz_1.autismQuizQuestions;
-            if (questionIndex >= 0 && questionIndex < questions.length) {
-                socket.emit('aq_question', {
-                    questionId: room.aqCurrentQuestion,
-                    questionText: questions[questionIndex].text,
-                    questionNumber: room.aqCurrentQuestion,
-                    totalQuestions: 20
+            this.socketRoomMap.set(socket.id, roomCode);
+            socket.join(roomCode);
+            // Notify everyone in the room
+            this.io.to(roomCode).emit('room_update', this.getRoomPublicState(room));
+            // If game is in AQ_QUESTION state, send the current question to the joining player
+            if (room.state === 'AQ_QUESTION' && room.aqCurrentQuestion) {
+                const questionIndex = room.aqCurrentQuestion - 1;
+                const questions = (_g = room.aqShuffledQuestions) !== null && _g !== void 0 ? _g : autismQuiz_1.autismQuizQuestions;
+                if (questionIndex >= 0 && questionIndex < questions.length) {
+                    socket.emit('aq_question', {
+                        questionId: room.aqCurrentQuestion,
+                        questionText: questions[questionIndex].text,
+                        questionNumber: room.aqCurrentQuestion,
+                        totalQuestions: 20
+                    });
+                }
+            }
+            // If game is in AQ_RESULTS state, send the results to the joining player
+            if (room.state === 'AQ_RESULTS' && room.aqScores) {
+                const rankings = Object.entries(room.aqScores)
+                    .map(([playerId, score]) => {
+                    var _a;
+                    const player = room.players.find(p => p.id === playerId);
+                    return { id: playerId, name: (_a = player === null || player === void 0 ? void 0 : player.name) !== null && _a !== void 0 ? _a : 'Unknown', score };
+                })
+                    .sort((a, b) => a.score - b.score);
+                const winner = rankings[0];
+                socket.emit('aq_results', {
+                    rankings,
+                    winnerId: (_h = winner === null || winner === void 0 ? void 0 : winner.id) !== null && _h !== void 0 ? _h : '',
+                    winnerName: (_j = winner === null || winner === void 0 ? void 0 : winner.name) !== null && _j !== void 0 ? _j : '',
+                    certificate: (0, autismQuiz_1.generateCertificateSVG)((_k = winner === null || winner === void 0 ? void 0 : winner.name) !== null && _k !== void 0 ? _k : 'Unknown', rankings)
                 });
             }
-        }
-        // If game is in AQ_RESULTS state, send the results to the joining player
-        if (room.state === 'AQ_RESULTS' && room.aqScores) {
-            const rankings = Object.entries(room.aqScores)
-                .map(([playerId, score]) => {
-                var _a;
-                const player = room.players.find(p => p.id === playerId);
-                return { id: playerId, name: (_a = player === null || player === void 0 ? void 0 : player.name) !== null && _a !== void 0 ? _a : 'Unknown', score };
-            })
-                .sort((a, b) => a.score - b.score);
-            const winner = rankings[0];
-            socket.emit('aq_results', {
-                rankings,
-                winnerId: (_d = winner === null || winner === void 0 ? void 0 : winner.id) !== null && _d !== void 0 ? _d : '',
-                winnerName: (_e = winner === null || winner === void 0 ? void 0 : winner.name) !== null && _e !== void 0 ? _e : '',
-                certificate: (0, autismQuiz_1.generateCertificateSVG)((_f = winner === null || winner === void 0 ? void 0 : winner.name) !== null && _f !== void 0 ? _f : 'Unknown', rankings)
-            });
-        }
+        });
     }
     handleCloseRoom(socket) {
         const roomCode = this.socketRoomMap.get(socket.id);
@@ -1937,6 +1987,25 @@ class GameManager {
         for (const player of activePlayers) {
             room.ccPlayerHands[player.id] = room.ccDeck.splice(0, 7);
         }
+        // Extremely rare: give a chance for any dealt card to be a Calamity
+        // probability is intentionally tiny (1 in 1,000,000,000 per card)
+        try {
+            const CALAMITY_PROB = 1e-9;
+            for (const playerId of Object.keys(room.ccPlayerHands)) {
+                const hand = room.ccPlayerHands[playerId];
+                for (let i = 0; i < hand.length; i++) {
+                    if (Math.random() < CALAMITY_PROB) {
+                        const calamity = createCalamityCard();
+                        hand[i] = calamity;
+                        // Announce to room (dramatic)
+                        this.io.to(room.code).emit('cc_calamity_discovered', { playerId, card: calamity });
+                    }
+                }
+            }
+        }
+        catch (e) {
+            // Defensive: if anything fails here, continue without calamity
+        }
         // Flip first card (keep flipping if it's a wild4)
         let firstCard = room.ccDeck.shift();
         while (firstCard.type === 'wild4') {
@@ -2030,6 +2099,10 @@ class GameManager {
         if (card.type === 'wild' || card.type === 'wild4') {
             return true;
         }
+        // Calamity can be played at any time (special, rare card)
+        if (card.type === 'calamity') {
+            return true;
+        }
         // Match color
         if (card.color === room.ccActiveColor) {
             return true;
@@ -2077,7 +2150,36 @@ class GameManager {
             playerName: player.name,
             card
         };
-        // Handle card effects
+        // Handle calamity immediately: next player draws 128 cards and is skipped
+        if (card.type === 'calamity') {
+            try {
+                const victimId = this.getNextCCPlayer(room);
+                // Draw 128 cards for the next player
+                this.drawCCCards(room, victimId, 128);
+                // Clear any draw stack
+                room.ccDrawStack = 0;
+                // Record action
+                room.ccLastAction = {
+                    type: 'calamity',
+                    playerId: player.id,
+                    playerName: player.name,
+                    card,
+                    victimId
+                };
+                // Announce to clients so UI can show dramatic effect
+                this.io.to(room.code).emit('cc_calamity_played', { by: player.id, victimId, card });
+            }
+            catch (err) {
+                // ignore errors; continue game
+            }
+            // Move turn to the player after the victim (skip the victim who drew)
+            room.ccCurrentPlayerId = this.getNextCCPlayer(room, true /* skip once */);
+            this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+            this.sendCCHands(room);
+            this.startCCTimer(room);
+            return;
+        }
+        // Handle wild/wild4 effects
         if (card.type === 'wild' || card.type === 'wild4') {
             // Player needs to pick a color
             room.ccPendingWildPlayerId = player.id;
@@ -2161,6 +2263,15 @@ class GameManager {
                     // No cards left anywhere
                     break;
                 }
+            }
+            // Extremely rare chance to draw the Calamity directly instead of a normal card
+            const CALAMITY_PROB = 1e-9;
+            if (Math.random() < CALAMITY_PROB) {
+                const calamity = createCalamityCard();
+                hand.push(calamity);
+                // Announce discovery
+                this.io.to(room.code).emit('cc_calamity_discovered', { playerId, card: calamity });
+                continue;
             }
             const card = room.ccDeck.shift();
             if (card) {
@@ -2274,7 +2385,7 @@ class GameManager {
         this.startCCTimer(room);
     }
     endCardCalamity(room, winnerId) {
-        var _a, _b, _c;
+        var _a, _b, _c, _d;
         this.clearCCTimer(room.code);
         room.state = 'CC_RESULTS';
         room.ccWinnerId = winnerId;
@@ -2292,6 +2403,9 @@ class GameManager {
                 else if (card.type === 'wild' || card.type === 'wild4') {
                     points += 50;
                 }
+                else if (card.type === 'calamity') {
+                    points += (_c = card.value) !== null && _c !== void 0 ? _c : 128;
+                }
             }
             scores[playerId] = points;
         }
@@ -2305,7 +2419,7 @@ class GameManager {
         });
         this.io.to(room.code).emit('cc_game_end', {
             winnerId,
-            winnerName: (_c = room.players.find(p => p.id === winnerId)) === null || _c === void 0 ? void 0 : _c.name,
+            winnerName: (_d = room.players.find(p => p.id === winnerId)) === null || _d === void 0 ? void 0 : _d.name,
             scores
         });
         this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
@@ -2333,9 +2447,10 @@ class GameManager {
         }
         // Shuffle player order for fair rotation of who gets real prompt
         room.sssRealDrawerOrder = [...activePlayers.map(p => p.id)].sort(() => Math.random() - 0.5);
-        // If double rounds, duplicate the order
+        // If double rounds, create a second completely different randomization
         if (room.sssDoubleRounds) {
-            room.sssRealDrawerOrder = [...room.sssRealDrawerOrder, ...room.sssRealDrawerOrder.sort(() => Math.random() - 0.5)];
+            const secondOrder = [...activePlayers.map(p => p.id)].sort(() => Math.random() - 0.5);
+            room.sssRealDrawerOrder = [...room.sssRealDrawerOrder, ...secondOrder];
         }
         room.totalRounds = room.sssRealDrawerOrder.length;
         room.sssRound = 0;
@@ -2590,7 +2705,7 @@ class GameManager {
         return {
             code: room.code,
             gameId: room.gameId,
-            players: room.players.map(p => ({ name: p.name, score: p.score, isConnected: p.isConnected, id: p.id, isBot: p.isBot })),
+            players: room.players.map(p => { var _a; return ({ name: p.name, score: p.score, isConnected: p.isConnected, id: p.id, isBot: p.isBot, profileIcon: (_a = p.profileIcon) !== null && _a !== void 0 ? _a : null }); }),
             controllerPlayerId: room.controllerPlayerId,
             state: room.state,
             currentRound: room.currentRound,

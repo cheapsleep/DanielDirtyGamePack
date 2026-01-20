@@ -690,6 +690,7 @@ export default function PlayerScreen() {
 
   return (
     <div className="w-full h-screen max-h-screen p-2 sm:p-4 flex flex-col bg-slate-900 text-white overflow-y-auto">
+      {calamityEvent && <CalamityExplosion event={calamityEvent} players={room?.players} />}
       <div className="flex justify-between items-center mb-2 sm:mb-4 text-xs sm:text-sm text-slate-500 border-b border-slate-700 pb-1 sm:pb-2">
           <div className="flex items-center gap-2">
             {isInGame && (
