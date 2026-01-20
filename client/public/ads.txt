@@ -1,0 +1,21 @@
+# ads.txt for Daniels Dirty Game Pack
+#
+# IMPORTANT: Replace the example lines below with the exact records from
+# your Ezoic account dashboard (or AdSense) before deploying. The file
+# must be available at https://your-domain/ads.txt for ad networks to
+# recognize authorized sellers.
+#
+# Example Google AdSense record (replace pub-XXXXXXXXXXXX with your ID):
+# google.com, pub-XXXXXXXXXXXX, DIRECT, f08c47fec0942fa0
+#
+# Example Ezoic record (replace YOUR_EZOIC_ACCOUNT_ID with the value
+# Ezoic gives you; relationship may be RESELLER or DIRECT):
+# ezoic.com, YOUR_EZOIC_ACCOUNT_ID, RESELLER, f08c47fec0942fa0
+#
+# For detailed guidance see: https://docs.ezoic.com/docs/ezoicads/adstxt/
+
+# --- BEGIN PLACEHOLDER RECORDS (replace these) ---
+# Replace the placeholders below with your real publisher IDs.
+google.com, pub-3497159293923811, DIRECT, f08c47fec0942fa0
+ezoic.com, REPLACE_WITH_YOUR_EZOIC_ID, RESELLER, f08c47fec0942fa0
+# --- END PLACEHOLDER RECORDS ---
