@@ -4,6 +4,7 @@ import { socket, socketServerUrl } from '../socket';
 import useAuth from '../hooks/useAuth'
 
 import WoodenButton from './WoodenButton';
+import RulesModal from './RulesModal';
 import AuthHeader from './AuthHeader';
 import AdsBanner from './AdsBanner';
 import ScribbleCanvas, { DrawingCanvasHandle } from './DrawingCanvas';
@@ -199,6 +200,7 @@ export default function PlayerScreen() {
   const [gameId, setGameId] = useState<string>('nasty-libs');
   const [playerId, setPlayerId] = useState<string>('');
   const [room, setRoom] = useState<RoomPublicState | null>(null);
+    const [rulesOpen, setRulesOpen] = useState(false);
   const [prompt, setPrompt] = useState('');
   const [votingOptions, setVotingOptions] = useState<string[]>([]);
   const [submitted, setSubmitted] = useState(false);
@@ -778,6 +780,9 @@ export default function PlayerScreen() {
                         // ignore
                       }
                     }} variant="red">Change Nickname</WoodenButton>
+                    <div className="mt-3">
+                      <button onClick={() => setRulesOpen(true)} className="px-4 py-2 bg-slate-700 text-white rounded">Rules</button>
+                    </div>
                   </div>
                 </div>
                 {isController ? (
@@ -955,6 +960,7 @@ export default function PlayerScreen() {
               <div className="text-center">
                 <h2 className="text-2xl font-bold mb-3">You’re playing this round</h2>
                 <p className="text-slate-400">Hang tight while others submit prompts.</p>
+                <RulesModal gameId={room?.gameId ?? gameId} open={rulesOpen} onClose={() => setRulesOpen(false)} />
               </div>
             ) : submitted ? (
               <div className="text-center">

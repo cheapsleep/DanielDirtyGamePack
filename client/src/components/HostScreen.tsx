@@ -110,6 +110,7 @@ interface RoomState {
 }
 
 import WoodenButton from './WoodenButton';
+import RulesModal from './RulesModal';
 
 interface HostScreenProps {
   onBack: () => void;
@@ -117,6 +118,7 @@ interface HostScreenProps {
 }
 
 export default function HostScreen({ onBack, gameId }: HostScreenProps) {
+    const [rulesOpen, setRulesOpen] = useState(false);
   const [room, setRoom] = useState<RoomState | null>(null);
   const [currentPrompt, setCurrentPrompt] = useState<string>('');
   const [votingOptions, setVotingOptions] = useState<string[]>([]);
@@ -568,9 +570,12 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
               <div className="text-sm text-slate-500 mt-2 uppercase tracking-widest">Controller: {controllerName}</div>
             </div>
         </div>
-        <WoodenButton variant="wood" onClick={handleBack} className="px-6 py-2 text-lg">
-          {room.state === 'LOBBY' ? 'BACK' : 'QUIT GAME'}
-        </WoodenButton>
+                <div className="flex items-center gap-2">
+                    <WoodenButton variant="wood" onClick={handleBack} className="px-6 py-2 text-lg">
+                        {room.state === 'LOBBY' ? 'BACK' : 'QUIT GAME'}
+                    </WoodenButton>
+                    <button onClick={() => setRulesOpen(true)} className="px-4 py-2 bg-slate-700 text-white rounded">Rules</button>
+                </div>
       </div>
 
       <div className="flex-1 flex flex-col items-center justify-center">
@@ -1683,6 +1688,7 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
             </div>
         )}
       </div>
+            <RulesModal gameId={room?.gameId ?? gameId} open={rulesOpen} onClose={() => setRulesOpen(false)} />
     </div>
   );
 }
