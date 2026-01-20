@@ -79,7 +79,7 @@ export default function AdsBanner({ slot = 'default', className = '' }: Props) {
       console.warn('[AdsBanner] failed to load adsense script', e)
       setLoadError(true)
     }
-  }, [visible, dismissed, loaded, ADS_ENABLED, ADS_PROVIDER, ADSENSE_CLIENT, user, slot, EZOIC_SCRIPT_URL])
+  }, [visible, dismissed, loaded, ADS_ENABLED, ADS_PROVIDER, ADSENSE_CLIENT, user, slot])
 
   const close = () => {
     try { localStorage.setItem(`ads:dismissed:${slot}`, '1') } catch {}
@@ -99,16 +99,14 @@ export default function AdsBanner({ slot = 'default', className = '' }: Props) {
               <div className="text-sm text-slate-400">This is a placeholder for ads (test mode or script load failed).</div>
             </div>
           ) : (
-            ADS_PROVIDER === 'adsense' ? (
-              <ins className="adsbygoogle"
-                style={{ display: 'block' }}
-                data-ad-client={ADSENSE_CLIENT}
-                data-ad-slot={ADSENSE_SLOT}
-                data-ad-format="auto"
-                data-full-width-responsive="true"
-                {...(ADS_TEST_MODE ? { 'data-adtest': 'on' } : {})}
-              />
-            )
+            <ins className="adsbygoogle"
+              style={{ display: 'block' }}
+              data-ad-client={ADSENSE_CLIENT}
+              data-ad-slot={ADSENSE_SLOT}
+              data-ad-format="auto"
+              data-full-width-responsive="true"
+              {...(ADS_TEST_MODE ? { 'data-adtest': 'on' } : {})}
+            />
           )}
           {ADS_TEST_MODE && <div className="text-xs text-slate-400 mt-1">(Ad test mode enabled)</div>}
         </div>
