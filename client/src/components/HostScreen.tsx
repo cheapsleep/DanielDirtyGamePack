@@ -111,6 +111,7 @@ interface RoomState {
 
 import WoodenButton from './WoodenButton';
 import RulesModal from './RulesModal';
+import CalamityExplosion from './CalamityExplosion';
 
 interface HostScreenProps {
   onBack: () => void;
@@ -118,8 +119,9 @@ interface HostScreenProps {
 }
 
 export default function HostScreen({ onBack, gameId }: HostScreenProps) {
-    const [rulesOpen, setRulesOpen] = useState(false);
-  const [room, setRoom] = useState<RoomState | null>(null);
+        const [rulesOpen, setRulesOpen] = useState(false);
+    const [calamityEvent, setCalamityEvent] = useState<{ by: string; victimId: string; card?: any } | null>(null);
+    const [room, setRoom] = useState<RoomState | null>(null);
   const [currentPrompt, setCurrentPrompt] = useState<string>('');
   const [votingOptions, setVotingOptions] = useState<string[]>([]);
   const [roundResults, setRoundResults] = useState<any[]>([]);
@@ -516,6 +518,16 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
   const controllerName = room
     ? room.players.find(p => p.id === room.controllerPlayerId)?.name ?? 'Nobody yet'
     : '';
+
+    // Listen for Calamity play events to show dramatic explosion overlay
+    useEffect(() => {
+        const handler = (data: any) => {
+            setCalamityEvent(data);
+            setTimeout(() => setCalamityEvent(null), 3800);
+        };
+        socket.on('cc_calamity_played', handler);
+        return () => { socket.off('cc_calamity_played', handler); };
+    }, []);
 
   if (!room) {
     return (
@@ -1688,7 +1700,8 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
             </div>
         )}
       </div>
-            <RulesModal gameId={room?.gameId ?? gameId} open={rulesOpen} onClose={() => setRulesOpen(false)} />
+                        <RulesModal gameId={room?.gameId ?? gameId} open={rulesOpen} onClose={() => setRulesOpen(false)} />
+            <CalamityExplosion event={calamityEvent} players={room?.players} />
     </div>
   );
 }

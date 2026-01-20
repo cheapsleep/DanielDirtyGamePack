@@ -9,6 +9,7 @@ import AuthHeader from './AuthHeader';
 import AdsBanner from './AdsBanner';
 import ScribbleCanvas, { DrawingCanvasHandle } from './DrawingCanvas';
 import CardCalamityCard, { ColorPicker, ActiveColorIndicator, CCCard } from './CardCalamityCard';
+import CalamityExplosion from './CalamityExplosion';
 
 // Simple drawing canvas (for Dubiously Patented)
 function DrawingCanvas({ onChange }: { onChange: (data: string) => void }) {
@@ -201,6 +202,7 @@ export default function PlayerScreen() {
   const [playerId, setPlayerId] = useState<string>('');
   const [room, setRoom] = useState<RoomPublicState | null>(null);
     const [rulesOpen, setRulesOpen] = useState(false);
+  const [calamityEvent, setCalamityEvent] = useState<{ by: string; victimId: string; card?: any } | null>(null);
   const [prompt, setPrompt] = useState('');
   const [votingOptions, setVotingOptions] = useState<string[]>([]);
   const [submitted, setSubmitted] = useState(false);
@@ -220,6 +222,15 @@ export default function PlayerScreen() {
   // Scribble Scrabble state
   const [scWordOptions, setScWordOptions] = useState<string[]>([]);
   const [scTimeLeft, setScTimeLeft] = useState(60);
+  // Listen for Calamity events to show explosion overlay
+  useEffect(() => {
+    const handler = (data: any) => {
+      setCalamityEvent(data);
+      setTimeout(() => setCalamityEvent(null), 3800);
+    };
+    socket.on('cc_calamity_played', handler);
+    return () => { socket.off('cc_calamity_played', handler); };
+  }, []);
   const [scGuessDraft, setScGuessDraft] = useState('');
   const [scGuessChat, setScGuessChat] = useState<{ playerId: string; playerName: string; guess: string; isCorrect: boolean; isClose: boolean }[]>([]);
   const [scRoundWord, setScRoundWord] = useState<string>('');

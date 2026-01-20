@@ -2328,7 +2328,36 @@ export class GameManager {
       card
     };
     
-    // Handle card effects
+    // Handle calamity immediately: next player draws 128 cards and is skipped
+    if (card.type === 'calamity') {
+      try {
+        const victimId = this.getNextCCPlayer(room);
+        // Draw 128 cards for the next player
+        this.drawCCCards(room, victimId, 128);
+        // Clear any draw stack
+        room.ccDrawStack = 0;
+        // Record action
+        room.ccLastAction = {
+          type: 'calamity',
+          playerId: player.id,
+          playerName: player.name,
+          card,
+          victimId
+        };
+        // Announce to clients so UI can show dramatic effect
+        this.io.to(room.code).emit('cc_calamity_played', { by: player.id, victimId, card });
+      } catch (err) {
+        // ignore errors; continue game
+      }
+      // Move turn to the player after the victim (skip the victim who drew)
+      room.ccCurrentPlayerId = this.getNextCCPlayer(room, true /* skip once */);
+      this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
+      this.sendCCHands(room);
+      this.startCCTimer(room);
+      return;
+    }
+
+    // Handle wild/wild4 effects
     if (card.type === 'wild' || card.type === 'wild4') {
       // Player needs to pick a color
       room.ccPendingWildPlayerId = player.id;
