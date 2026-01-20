@@ -763,7 +763,7 @@ export default function PlayerScreen() {
                 <p className="text-slate-400 text-lg">Watch the main screen for the room.</p>
                 {/* Change nickname button for players while in lobby (allowed until game starts) */}
                 <div className="mt-4">
-                  <div className="max-w-md mx-auto">
+                  <div className="max-w-md mx-auto flex flex-col items-center gap-3">
                     <WoodenButton onClick={async () => {
                       const newNick = window.prompt('Enter new nickname (max 24 chars)', (user?.nickname ?? playerName) || '')
                       if (!newNick) return
@@ -780,9 +780,7 @@ export default function PlayerScreen() {
                         // ignore
                       }
                     }} variant="red">Change Nickname</WoodenButton>
-                    <div className="mt-3">
-                      <button onClick={() => setRulesOpen(true)} className="px-4 py-2 bg-slate-700 text-white rounded">Rules</button>
-                    </div>
+                    <WoodenButton onClick={() => setRulesOpen(true)} variant="red">Rules</WoodenButton>
                   </div>
                 </div>
                 {isController ? (

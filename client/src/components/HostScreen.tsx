@@ -574,7 +574,7 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
                     <WoodenButton variant="wood" onClick={handleBack} className="px-6 py-2 text-lg">
                         {room.state === 'LOBBY' ? 'BACK' : 'QUIT GAME'}
                     </WoodenButton>
-                    <button onClick={() => setRulesOpen(true)} className="px-4 py-2 bg-slate-700 text-white rounded">Rules</button>
+                    <WoodenButton variant="wood" onClick={() => setRulesOpen(true)} className="px-4 py-2 text-lg">Rules</WoodenButton>
                 </div>
       </div>
 
