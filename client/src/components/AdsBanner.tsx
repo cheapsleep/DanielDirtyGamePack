@@ -11,6 +11,7 @@ export default function AdsBanner({ slot = 'default', className = '' }: Props) {
   const [visible, setVisible] = useState(false)
   const [loaded, setLoaded] = useState(false)
   const [dismissed, setDismissed] = useState(false)
+  const [loadError, setLoadError] = useState(false)
   const ref = useRef<HTMLDivElement | null>(null)
 
   const ADS_ENABLED = (import.meta.env.VITE_ADS_ENABLED ?? 'false') === 'true'
@@ -59,17 +60,22 @@ export default function AdsBanner({ slot = 'default', className = '' }: Props) {
         s.async = true
         s.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_CLIENT}`
         s.crossOrigin = 'anonymous'
-        document.head.appendChild(s)
         s.onload = () => {
           setLoaded(true)
           try { (window as any).adsbygoogle = (window as any).adsbygoogle || []; (window as any).adsbygoogle.push({}) } catch {}
         }
+        s.onerror = (e) => {
+          console.warn('[AdsBanner] AdSense script error', e)
+          setLoadError(true)
+        }
+        document.head.appendChild(s)
       } else {
         setLoaded(true)
-        try { (window as any).adsbygoogle = (window as any).adsbygoogle || []; (window as any).adsbygoogle.push({}) } catch {}
+        try { (window as any).adsbygoogle = (window as any).adsbygoogle || []; (window as any).adsbygoogle.push({}) } catch (e) { console.warn('[AdsBanner] push failed', e); setLoadError(true) }
       }
     } catch (e) {
       console.warn('[AdsBanner] failed to load adsense script', e)
+      setLoadError(true)
     }
   }, [visible, dismissed, loaded, ADS_ENABLED, ADS_PROVIDER, ADSENSE_CLIENT, user, slot])
 
@@ -85,14 +91,20 @@ export default function AdsBanner({ slot = 'default', className = '' }: Props) {
       <div className="bg-stone-800 text-center rounded p-1 w-full max-w-4xl relative">
         <button onClick={close} className="absolute right-2 top-1 text-slate-400">×</button>
         <div className="mx-auto" style={{ maxWidth: 970 }}>
-          <ins className="adsbygoogle"
-            style={{ display: 'block' }}
-            data-ad-client={ADSENSE_CLIENT}
-            data-ad-slot={ADSENSE_SLOT}
-            data-ad-format="auto"
-            data-full-width-responsive="true"
-            {...(ADS_TEST_MODE ? { 'data-adtest': 'on' } : {})}
-          />
+          { (ADS_TEST_MODE || loadError) ? (
+            <div className="w-full bg-slate-700 border border-slate-600 text-center rounded p-6">
+              <div className="text-xl font-bold">Test Ad</div>
+              <div className="text-sm text-slate-400">This is a placeholder for AdSense (test mode or script load failed).</div>
+            </div>
+          ) : (
+            <ins className="adsbygoogle"
+              style={{ display: 'block' }}
+              data-ad-client={ADSENSE_CLIENT}
+              data-ad-slot={ADSENSE_SLOT}
+              data-ad-format="auto"
+              data-full-width-responsive="true"
+            />
+          )}
           {ADS_TEST_MODE && <div className="text-xs text-slate-400 mt-1">(AdSense test mode enabled)</div>}
         </div>
       </div>
