@@ -15,7 +15,6 @@
 # For detailed guidance see: https://docs.ezoic.com/docs/ezoicads/adstxt/
 
 # --- BEGIN PLACEHOLDER RECORDS (replace these) ---
-# Replace the placeholders below with your real publisher IDs.
+# Replace the placeholder below with your real AdSense publisher ID.
 google.com, pub-3497159293923811, DIRECT, f08c47fec0942fa0
-ezoic.com, REPLACE_WITH_YOUR_EZOIC_ID, RESELLER, f08c47fec0942fa0
 # --- END PLACEHOLDER RECORDS ---
