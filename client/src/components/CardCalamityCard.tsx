@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 
 export type CCColor = 'red' | 'blue' | 'green' | 'yellow';
-export type CCCardType = 'number' | 'skip' | 'reverse' | 'draw2' | 'wild' | 'wild4';
+export type CCCardType = 'number' | 'skip' | 'reverse' | 'draw2' | 'wild' | 'wild4' | 'calamity';
 
 export interface CCCard {
   id: string;
@@ -48,6 +48,8 @@ const getCardContent = (card: CCCard): { symbol: string; text: string } => {
   switch (card.type) {
     case 'number':
       return { symbol: String(card.value ?? 0), text: String(card.value ?? 0) };
+    case 'calamity':
+      return { symbol: '💥', text: '+128' };
     case 'skip':
       return { symbol: '🚫', text: 'SKIP' };
     case 'reverse':
@@ -75,6 +77,7 @@ export default function CardCalamityCard({
 }: CardCalamityCardProps) {
   const content = getCardContent(card);
   const isWild = card.type === 'wild' || card.type === 'wild4';
+  const isCalamity = card.type === 'calamity';
   
   const sizeClasses = large
     ? 'w-40 h-56 sm:w-48 sm:h-64'
@@ -107,8 +110,8 @@ export default function CardCalamityCard({
         ${sizeClasses} 
         rounded-xl 
         border-4 
-        ${isWild ? 'border-slate-700' : colorStyle?.border}
-        ${isWild ? 'bg-gradient-to-br from-red-500 via-yellow-500 via-green-500 to-blue-500' : `bg-gradient-to-br ${colorStyle?.gradient}`}
+          ${isWild || isCalamity ? 'border-slate-700' : colorStyle?.border}
+          ${isCalamity ? 'bg-gradient-to-br from-black via-gray-800 to-gray-900' : isWild ? 'bg-gradient-to-br from-red-500 via-yellow-500 via-green-500 to-blue-500' : `bg-gradient-to-br ${colorStyle?.gradient}`}
         shadow-lg 
         relative 
         overflow-hidden
@@ -135,12 +138,12 @@ export default function CardCalamityCard({
         <div className={`
           ${centerSize}
           font-bold
-          ${isWild ? 'text-white' : card.color === 'yellow' ? 'text-yellow-700' : `text-${card.color}-600`}
+          ${isCalamity ? 'text-white' : isWild ? 'text-white' : card.color === 'yellow' ? 'text-yellow-700' : `text-${card.color}-600`}
           drop-shadow-lg
           transform -rotate-12
         `}
         style={{ 
-          color: isWild ? 'white' : undefined,
+          color: isCalamity || isWild ? 'white' : undefined,
           textShadow: '2px 2px 4px rgba(0,0,0,0.3)'
         }}
         >

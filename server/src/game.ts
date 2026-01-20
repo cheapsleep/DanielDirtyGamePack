@@ -10,13 +10,18 @@ type GameId = 'nasty-libs' | 'dubiously-patented' | 'autism-assessment' | 'scrib
 
 // Card Calamity types
 type CCColor = 'red' | 'blue' | 'green' | 'yellow';
-type CCCardType = 'number' | 'skip' | 'reverse' | 'draw2' | 'wild' | 'wild4';
+type CCCardType = 'number' | 'skip' | 'reverse' | 'draw2' | 'wild' | 'wild4' | 'calamity';
 
 interface CCCard {
   id: string;
   color: CCColor | null; // null for wild cards
   type: CCCardType;
   value?: number; // 0-9 for number cards
+}
+
+// Helper to create a Calamity card (+128)
+function createCalamityCard() : CCCard {
+  return { id: uuidv4(), color: null, type: 'calamity', value: 128 };
 }
 
 interface Player {
@@ -2143,6 +2148,25 @@ export class GameManager {
     for (const player of activePlayers) {
       room.ccPlayerHands[player.id] = room.ccDeck.splice(0, 7);
     }
+
+    // Extremely rare: give a chance for any dealt card to be a Calamity
+    // probability is intentionally tiny (1 in 1,000,000,000 per card)
+    try {
+      const CALAMITY_PROB = 1e-9;
+      for (const playerId of Object.keys(room.ccPlayerHands)) {
+        const hand = room.ccPlayerHands[playerId];
+        for (let i = 0; i < hand.length; i++) {
+          if (Math.random() < CALAMITY_PROB) {
+            const calamity = createCalamityCard();
+            hand[i] = calamity;
+            // Announce to room (dramatic)
+            this.io.to(room.code).emit('cc_calamity_discovered', { playerId, card: calamity });
+          }
+        }
+      }
+    } catch (e) {
+      // Defensive: if anything fails here, continue without calamity
+    }
     
     // Flip first card (keep flipping if it's a wild4)
     let firstCard = room.ccDeck.shift()!;
@@ -2242,6 +2266,11 @@ export class GameManager {
     
     // Wild cards can always be played
     if (card.type === 'wild' || card.type === 'wild4') {
+      return true;
+    }
+
+    // Calamity can be played at any time (special, rare card)
+    if (card.type === 'calamity') {
       return true;
     }
     
@@ -2395,6 +2424,16 @@ export class GameManager {
         }
       }
       
+      // Extremely rare chance to draw the Calamity directly instead of a normal card
+      const CALAMITY_PROB = 1e-9;
+      if (Math.random() < CALAMITY_PROB) {
+        const calamity = createCalamityCard();
+        hand.push(calamity);
+        // Announce discovery
+        this.io.to(room.code).emit('cc_calamity_discovered', { playerId, card: calamity });
+        continue;
+      }
+
       const card = room.ccDeck.shift();
       if (card) {
         hand.push(card);
@@ -2550,6 +2589,8 @@ export class GameManager {
           points += 20;
         } else if (card.type === 'wild' || card.type === 'wild4') {
           points += 50;
+        } else if (card.type === 'calamity') {
+          points += card.value ?? 128;
         }
       }
       scores[playerId] = points;
