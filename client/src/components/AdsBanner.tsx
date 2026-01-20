@@ -15,8 +15,13 @@ export default function AdsBanner({ slot = 'default', className = '' }: Props) {
 
   const ADS_ENABLED = (import.meta.env.VITE_ADS_ENABLED ?? 'false') === 'true'
   const ADS_PROVIDER = (import.meta.env.VITE_ADS_PROVIDER ?? '').toLowerCase()
-  const ADSENSE_CLIENT = import.meta.env.VITE_ADS_ADSENSE_CLIENT ?? ''
+  let ADSENSE_CLIENT = (import.meta.env.VITE_ADS_ADSENSE_CLIENT ?? '').toString()
   const ADSENSE_SLOT = import.meta.env.VITE_ADS_ADSENSE_SLOT ?? ''
+  const ADS_TEST_MODE = (import.meta.env.VITE_ADS_TEST_MODE ?? 'false') === 'true'
+  // Accept publisher ids that start with "pub-" by normalizing to "ca-pub-..."
+  if (ADSENSE_CLIENT && ADSENSE_CLIENT.startsWith('pub-')) {
+    ADSENSE_CLIENT = `ca-${ADSENSE_CLIENT}`
+  }
 
   useEffect(() => {
     try {
@@ -48,6 +53,7 @@ export default function AdsBanner({ slot = 'default', className = '' }: Props) {
     // load AdSense script lazily
     if (typeof window === 'undefined') return
     try {
+      console.debug('[AdsBanner] visible, loading adsense:', { ADSENSE_CLIENT, ADSENSE_SLOT, ADS_TEST_MODE })
       if (!(window as any).adsbygoogle && ADSENSE_CLIENT) {
         const s = document.createElement('script')
         s.async = true
@@ -63,7 +69,7 @@ export default function AdsBanner({ slot = 'default', className = '' }: Props) {
         try { (window as any).adsbygoogle = (window as any).adsbygoogle || []; (window as any).adsbygoogle.push({}) } catch {}
       }
     } catch (e) {
-      // ignore
+      console.warn('[AdsBanner] failed to load adsense script', e)
     }
   }, [visible, dismissed, loaded, ADS_ENABLED, ADS_PROVIDER, ADSENSE_CLIENT, user, slot])
 
@@ -85,7 +91,9 @@ export default function AdsBanner({ slot = 'default', className = '' }: Props) {
             data-ad-slot={ADSENSE_SLOT}
             data-ad-format="auto"
             data-full-width-responsive="true"
+            {...(ADS_TEST_MODE ? { 'data-adtest': 'on' } : {})}
           />
+          {ADS_TEST_MODE && <div className="text-xs text-slate-400 mt-1">(AdSense test mode enabled)</div>}
         </div>
       </div>
     </div>
