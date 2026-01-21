@@ -44,7 +44,7 @@ export default function GameLibrary({ onSelectGame }: GameLibraryProps) {
     {
       id: 'scribble-scrabble-scrambled',
       title: 'SCRIBBLE SCRABBLE: SCRAMBLED',
-      description: 'One player gets a real prompt, everyone else gets scrambled variants. Draw, then vote to find the imposter! Trick others to win.',
+      description: 'The hilarious drawing and guessing game of mix-ups. Write a prompt, pass it on to be drawn, then pass it on again to be described. Watch as your original idea gets twisted and transformed!',
       color: 'bg-amber-600',
       logo: '/assets/SSS_Logo.svg',
       minPlayers: 3,

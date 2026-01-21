@@ -245,7 +245,7 @@ export default function PlayerScreen() {
   const [ccTimeLeft, setCcTimeLeft] = useState(30);
   const [ccSelectedCardId, setCcSelectedCardId] = useState<string | null>(null);
   // Scribble Scrabble: Scrambled state
-  const [sssTurnData, setSssTurnData] = useState<{ type: 'prompt' | 'drawing', content: string } | null>(null);
+  const [sssTurnData, setSssTurnData] = useState<{ type: 'prompt' | 'drawing' | 'caption', content: string } | null>(null);
   const [sssTimeLeft, setSssTimeLeft] = useState<number>(90);
   const [sssPromptDraft, setSssPromptDraft] = useState('');
   const [sssCaptionDraft, setSssCaptionDraft] = useState('');
@@ -397,7 +397,7 @@ export default function PlayerScreen() {
     socket.on('cc_game_end', onCcGameEnd);
 
     // Scribble Scrabble: Scrambled events
-    const onSssTurnData = (data: { type: 'prompt' | 'drawing', content: string }) => { setSssTurnData(data); };
+    const onSssTurnData = (data: { type: 'prompt' | 'drawing' | 'caption', content: string }) => { setSssTurnData(data); };
     socket.on('sss_turn_data', onSssTurnData);
 
     const onSssTimer = (data: { timeLeft: number }) => { setSssTimeLeft(data.timeLeft); };
@@ -1865,7 +1865,7 @@ export default function PlayerScreen() {
                     <p className="text-slate-400 text-lg">Waiting for other players to finish drawing...</p>
                     <p className="text-sm text-slate-500 mt-2">({room.sssPlayersFinished?.length ?? 0}/{totalPlayers})</p>
                   </div>
-                ) : sssTurnData && sssTurnData.type === 'prompt' ? (
+                ) : sssTurnData && (sssTurnData.type === 'prompt' || sssTurnData.type === 'caption') ? (
                   <div className="flex flex-col gap-3">
                     <div className="bg-slate-800 rounded-lg p-3">
                       <p className="text-slate-400 text-sm mb-1">Your prompt to draw:</p>
