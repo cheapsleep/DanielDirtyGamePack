@@ -2617,54 +2617,39 @@ class GameManager {
         }
     }
     calculateSSSScores(room) {
-        var _a, _b, _c, _d, _e, _f;
+        var _a, _b, _c, _d;
         const realDrawerId = room.sssRealDrawerId;
         const votes = (_a = room.sssVotes) !== null && _a !== void 0 ? _a : {};
-        // Calculate how many people voted for each player
+        // Tally votes for each target player
         const votesByTarget = {};
         for (const [voterId, targetId] of Object.entries(votes)) {
-            if (!votesByTarget[targetId]) {
+            if (!votesByTarget[targetId])
                 votesByTarget[targetId] = [];
-            }
             votesByTarget[targetId].push(voterId);
         }
-        // Count how many people the real drawer tricked (voted for them = wrong)
-        // Actually, people who voted for the REAL drawer guessed correctly
-        // People who voted for someone ELSE got tricked by that person
+        // Compute vote counts and top-2 winners (by drawing votes)
+        const voteCounts = Object.entries(votesByTarget).map(([pid, voters]) => ({ playerId: pid, count: voters.length }));
+        voteCounts.sort((a, b) => b.count - a.count || a.playerId.localeCompare(b.playerId));
+        const topTwo = voteCounts.slice(0, 2);
+        const topDrawings = topTwo.map(t => { var _a, _b, _c, _d; return ({ playerId: t.playerId, drawing: (_b = (_a = room.sssDrawings) === null || _a === void 0 ? void 0 : _a[t.playerId]) !== null && _b !== void 0 ? _b : '', votes: t.count, name: (_d = (_c = room.players.find(p => p.id === t.playerId)) === null || _c === void 0 ? void 0 : _c.name) !== null && _d !== void 0 ? _d : 'Unknown' }); });
+        const topPrompts = topTwo.map(t => { var _a, _b, _c, _d; return ({ playerId: t.playerId, prompt: (_b = (_a = room.sssAllPrompts) === null || _a === void 0 ? void 0 : _a[t.playerId]) !== null && _b !== void 0 ? _b : '', votes: t.count, name: (_d = (_c = room.players.find(p => p.id === t.playerId)) === null || _c === void 0 ? void 0 : _c.name) !== null && _d !== void 0 ? _d : 'Unknown' }); });
+        // Prepare a lightweight round summary (no scoring awarded)
         room.sssRoundScores = {};
-        room.sssScores = (_b = room.sssScores) !== null && _b !== void 0 ? _b : {};
-        for (const playerId of (_c = room.sssActivePlayerIds) !== null && _c !== void 0 ? _c : []) {
-            room.sssRoundScores[playerId] = { tricked: 0, correct: false };
-        }
-        // Award points
-        for (const [voterId, targetId] of Object.entries(votes)) {
-            if (targetId === realDrawerId) {
-                // Correct guess! +2 points
-                room.sssScores[voterId] = ((_d = room.sssScores[voterId]) !== null && _d !== void 0 ? _d : 0) + 2;
-                room.sssRoundScores[voterId].correct = true;
-            }
-            else {
-                // Wrong guess - the person they voted for tricked them (+1 for that person)
-                room.sssScores[targetId] = ((_e = room.sssScores[targetId]) !== null && _e !== void 0 ? _e : 0) + 1;
-                room.sssRoundScores[targetId].tricked += 1;
-            }
-        }
-        // Update player scores in the player list
-        for (const player of room.players) {
-            player.score = (_f = room.sssScores[player.id]) !== null && _f !== void 0 ? _f : 0;
+        for (const pid of (_b = room.sssActivePlayerIds) !== null && _b !== void 0 ? _b : []) {
+            room.sssRoundScores[pid] = { tricked: (_d = (_c = votesByTarget[pid]) === null || _c === void 0 ? void 0 : _c.length) !== null && _d !== void 0 ? _d : 0, correct: pid === realDrawerId };
         }
         room.state = 'SSS_RESULTS';
         this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
-        // Send detailed results
         this.io.to(room.code).emit('sss_results', {
             realDrawerId,
             realPrompt: room.sssRealPrompt,
             allPrompts: room.sssAllPrompts,
             drawings: room.sssDrawings,
             votes: room.sssVotes,
-            roundScores: room.sssRoundScores,
-            totalScores: room.sssScores,
-            votesByTarget
+            votesByTarget,
+            topDrawings,
+            topPrompts,
+            roundSummary: room.sssRoundScores
         });
     }
     advanceSSSRound(room) {

@@ -254,9 +254,12 @@ export default function PlayerScreen() {
     allPrompts: Record<string, string>;
     drawings: Record<string, string>;
     votes: Record<string, string>;
-    roundScores: Record<string, { tricked: number; correct: boolean }>;
-    totalScores: Record<string, number>;
-    votesByTarget: Record<string, string[]>;
+    roundScores?: Record<string, { tricked: number; correct: boolean }>;
+    roundSummary?: Record<string, { tricked: number; correct: boolean }>;
+    totalScores?: Record<string, number>;
+    votesByTarget?: Record<string, string[]>;
+    topDrawings?: Array<{ playerId: string; drawing: string; votes: number; name: string }>;
+    topPrompts?: Array<{ playerId: string; prompt: string; votes: number; name: string }>;
   } | null>(null);
   const sssCanvasRef = useRef<DrawingCanvasHandle>(null);
 
@@ -1982,43 +1985,14 @@ export default function PlayerScreen() {
           </div>
         )}
 
-        {/* Scribble Scrabble: Scrambled - Results */}
+        {/* Scribble Scrabble: Scrambled - Results (vote-based reveal) */}
         {gameState === 'SSS_RESULTS' && sssResults && (
           <div className="w-full max-w-lg mx-auto">
             <div className="text-center mb-4">
-              <h2 className="text-2xl font-bold text-purple-400 mb-2">📊 Round Results</h2>
+              <h2 className="text-2xl font-bold text-purple-400 mb-2">📣 Reveal: Votes & Winners</h2>
               <p className="text-slate-400">Round {room?.sssRound}/{room?.totalRounds}</p>
             </div>
-            
-            {/* Personal score breakdown */}
-            <div className="bg-slate-800 rounded-lg p-4 mb-4">
-              <h3 className="font-bold text-white mb-2">Your Round:</h3>
-              <div className="space-y-1">
-                {sssResults.roundScores[playerId]?.tricked > 0 && (
-                  <motion.div
-                    initial={{ x: -20, opacity: 0 }}
-                    animate={{ x: 0, opacity: 1 }}
-                    className="text-green-400"
-                  >
-                    Tricked {sssResults.roundScores[playerId].tricked} player(s): +{sssResults.roundScores[playerId].tricked}
-                  </motion.div>
-                )}
-                {sssResults.roundScores[playerId]?.correct && (
-                  <motion.div
-                    initial={{ x: -20, opacity: 0 }}
-                    animate={{ x: 0, opacity: 1 }}
-                    transition={{ delay: 0.2 }}
-                    className="text-green-400"
-                  >
-                    Correct guess: +2
-                  </motion.div>
-                )}
-                {!sssResults.roundScores[playerId]?.tricked && !sssResults.roundScores[playerId]?.correct && (
-                  <div className="text-slate-400">No points this round</div>
-                )}
-              </div>
-            </div>
-            
+
             {/* Real prompt reveal */}
             <div className="bg-gradient-to-r from-yellow-600 to-orange-600 rounded-lg p-4 mb-4 text-center">
               <p className="text-sm text-white/80 mb-1">The REAL prompt was:</p>
@@ -2028,41 +2002,58 @@ export default function PlayerScreen() {
                 {sssResults.realDrawerId === playerId && " (You!)"}
               </p>
             </div>
-            
-            {/* All prompts that were in play */}
+
+            {/* Top drawings */}
             <div className="bg-slate-800 rounded-lg p-4 mb-4">
-              <h3 className="font-bold text-white mb-2">All Prompts:</h3>
-              <div className="space-y-1 text-sm">
-                {Object.entries(sssResults.allPrompts).map(([pid, prompt]) => {
+              <h3 className="font-bold text-white mb-3">Top Drawings (by votes)</h3>
+              <div className="grid grid-cols-1 gap-3">
+                {(sssResults.topDrawings ?? []).map((d: any, i: number) => (
+                  <div key={d.playerId} className={`flex gap-3 items-center p-2 rounded ${i === 0 ? 'ring-2 ring-yellow-400' : 'bg-slate-700'}`}>
+                    <div className="w-20 h-16 bg-white rounded overflow-hidden flex items-center justify-center">
+                      {d.drawing ? <img src={d.drawing} alt={`Top ${i+1}`} className="w-full h-full object-contain" /> : <div className="text-slate-400">No drawing</div>}
+                    </div>
+                    <div className="flex-1 text-left">
+                      <div className="font-semibold">{d.name}</div>
+                      <div className="text-sm text-slate-400">Votes: {d.votes}</div>
+                    </div>
+                  </div>
+                ))}
+                {((sssResults.topDrawings ?? []).length === 0) && (
+                  <div className="text-slate-400">No votes recorded.</div>
+                )}
+              </div>
+            </div>
+
+            {/* Top prompts */}
+            <div className="bg-slate-800 rounded-lg p-4 mb-4">
+              <h3 className="font-bold text-white mb-3">Top Prompts (by votes)</h3>
+              <div className="space-y-2 text-sm">
+                {(sssResults.topPrompts ?? []).map((p: any, i: number) => (
+                  <div key={p.playerId} className={`${i === 0 ? 'text-yellow-400 font-semibold' : 'text-slate-300'}`}>
+                    {p.name}: "{p.prompt}" — Votes: {p.votes}
+                  </div>
+                ))}
+                {((sssResults.topPrompts ?? []).length === 0) && (
+                  <div className="text-slate-400">No prompts recorded.</div>
+                )}
+              </div>
+            </div>
+
+            {/* Vote breakdown (optional) */}
+            <div className="bg-slate-800 rounded-lg p-4 mb-4">
+              <h3 className="font-bold text-white mb-2">Vote Breakdown</h3>
+              <div className="text-sm text-slate-300">
+                {Object.entries(sssResults.votesByTarget ?? {}).map(([pid, voters]) => {
                   const player = room?.players?.find(p => p.id === pid);
-                  const isReal = pid === sssResults.realDrawerId;
                   return (
-                    <div key={pid} className={isReal ? 'text-yellow-400 font-semibold' : 'text-slate-300'}>
-                      {player?.name}: "{prompt}" {isReal && '(REAL)'}
+                    <div key={pid} className="mb-1">
+                      <span className="font-semibold">{player?.name ?? pid}</span>: {voters.length} vote(s)
                     </div>
                   );
                 })}
               </div>
             </div>
-            
-            {/* Current standings */}
-            <div className="bg-slate-800 rounded-lg p-4 mb-4">
-              <h3 className="font-bold text-white mb-2">Standings:</h3>
-              <div className="space-y-1">
-                {Object.entries(sssResults.totalScores)
-                  .sort(([,a], [,b]) => b - a)
-                  .map(([pid, score], i) => {
-                    const player = room?.players?.find(p => p.id === pid);
-                    return (
-                      <div key={pid} className={`flex justify-between ${pid === playerId ? 'text-yellow-400 font-bold' : 'text-slate-300'}`}>
-                        <span>#{i + 1} {player?.name}</span>
-                        <span>{score} pts</span>
-                      </div>
-                    );
-                  })}
-              </div>
-            </div>
-            
+
             {isController && (
               <WoodenButton
                 type="button"

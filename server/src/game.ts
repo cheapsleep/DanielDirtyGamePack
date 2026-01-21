@@ -2869,58 +2869,42 @@ export class GameManager {
   private calculateSSSScores(room: Room) {
     const realDrawerId = room.sssRealDrawerId!;
     const votes = room.sssVotes ?? {};
-    
-    // Calculate how many people voted for each player
+
+    // Tally votes for each target player
     const votesByTarget: Record<string, string[]> = {};
     for (const [voterId, targetId] of Object.entries(votes)) {
-      if (!votesByTarget[targetId]) {
-        votesByTarget[targetId] = [];
-      }
+      if (!votesByTarget[targetId]) votesByTarget[targetId] = [];
       votesByTarget[targetId].push(voterId);
     }
-    
-    // Count how many people the real drawer tricked (voted for them = wrong)
-    // Actually, people who voted for the REAL drawer guessed correctly
-    // People who voted for someone ELSE got tricked by that person
-    
+
+    // Compute vote counts and top-2 winners (by drawing votes)
+    const voteCounts: { playerId: string; count: number }[] = Object.entries(votesByTarget).map(([pid, voters]) => ({ playerId: pid, count: voters.length }));
+    voteCounts.sort((a, b) => b.count - a.count || a.playerId.localeCompare(b.playerId));
+
+    const topTwo = voteCounts.slice(0, 2);
+
+    const topDrawings = topTwo.map(t => ({ playerId: t.playerId, drawing: room.sssDrawings?.[t.playerId] ?? '', votes: t.count, name: room.players.find(p => p.id === t.playerId)?.name ?? 'Unknown' }));
+    const topPrompts = topTwo.map(t => ({ playerId: t.playerId, prompt: room.sssAllPrompts?.[t.playerId] ?? '', votes: t.count, name: room.players.find(p => p.id === t.playerId)?.name ?? 'Unknown' }));
+
+    // Prepare a lightweight round summary (no scoring awarded)
     room.sssRoundScores = {};
-    room.sssScores = room.sssScores ?? {};
-    
-    for (const playerId of room.sssActivePlayerIds ?? []) {
-      room.sssRoundScores[playerId] = { tricked: 0, correct: false };
+    for (const pid of room.sssActivePlayerIds ?? []) {
+      room.sssRoundScores[pid] = { tricked: votesByTarget[pid]?.length ?? 0, correct: pid === realDrawerId };
     }
-    
-    // Award points
-    for (const [voterId, targetId] of Object.entries(votes)) {
-      if (targetId === realDrawerId) {
-        // Correct guess! +2 points
-        room.sssScores[voterId] = (room.sssScores[voterId] ?? 0) + 2;
-        room.sssRoundScores[voterId].correct = true;
-      } else {
-        // Wrong guess - the person they voted for tricked them (+1 for that person)
-        room.sssScores[targetId] = (room.sssScores[targetId] ?? 0) + 1;
-        room.sssRoundScores[targetId].tricked += 1;
-      }
-    }
-    
-    // Update player scores in the player list
-    for (const player of room.players) {
-      player.score = room.sssScores[player.id] ?? 0;
-    }
-    
+
     room.state = 'SSS_RESULTS';
     this.io.to(room.code).emit('room_update', this.getRoomPublicState(room));
-    
-    // Send detailed results
+
     this.io.to(room.code).emit('sss_results', {
       realDrawerId,
       realPrompt: room.sssRealPrompt,
       allPrompts: room.sssAllPrompts,
       drawings: room.sssDrawings,
       votes: room.sssVotes,
-      roundScores: room.sssRoundScores,
-      totalScores: room.sssScores,
-      votesByTarget
+      votesByTarget,
+      topDrawings,
+      topPrompts,
+      roundSummary: room.sssRoundScores
     });
   }
 

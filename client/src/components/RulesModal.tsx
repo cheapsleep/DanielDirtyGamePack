@@ -103,20 +103,29 @@ function getRules(gameId?: string) {
 		case 'scribble-scrabble-scrambled':
 			return (
 				<div className="space-y-3 text-sm sm:text-base text-slate-200">
-					<p className="font-bold">Scribble Scrabble (Scrambled) — Rules</p>
+					<p className="font-bold">Scribble Scrabble: Scrambled — (Paper‑Telephone Variant)</p>
 					<div>
 						<p className="font-semibold">Overview</p>
 						<p>
-							Variant where most players receive decoy prompts; one player has the true prompt. Drawings are voted on to identify
-							the real prompt.
+							Players take turns in a chain: the first player writes a short text prompt, the next player draws it, the next writes a caption describing the drawing, then the next draws that caption, and so on until the chain returns to the origin — then the full chain is revealed for laughs.
 						</p>
 					</div>
 					<div>
-						<p className="font-semibold">Flow</p>
+						<p className="font-semibold">Round Flow (short)</p>
 						<ul className="list-disc pl-5">
-							<li>Players draw assigned prompts anonymously.</li>
-							<li>After drawing, drawings are shown and players vote which they think is real.</li>
-							<li>Scoring is based on who fooled whom and who guessed correctly.</li>
+							<li>Round starts with a text prompt from the first player.</li>
+							<li>Players alternate: draw → caption → draw → caption until every player has contributed (full circle).</li>
+							<li>After the chain completes, everyone votes for the funniest or best item (drawing or caption).</li>
+							<li>No scores are awarded — votes are shown and the top two items are highlighted.</li>
+						</ul>
+					</div>
+					<div>
+						<p className="font-semibold">Tips & Notes</p>
+						<ul className="list-disc pl-5">
+							<li>First prompt is text by default.</li>
+							<li>For groups smaller than 4, the chain will loop so contributions are repeated to keep things funny.</li>
+							<li>Reveal shows the chain chronologically; author names stay hidden until reveal completes.</li>
+							<li>Be playful and keep content within community guidelines.</li>
 						</ul>
 					</div>
 				</div>
