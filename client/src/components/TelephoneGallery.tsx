@@ -32,30 +32,30 @@ const TelephoneGallery: React.FC<TelephoneGalleryProps> = ({ books, players }) =
   };
 
   return (
-    <div className="space-y-8">
+    <div className="flex space-x-4 p-4 overflow-x-auto bg-slate-900 rounded-lg">
       {books.map(book => (
-        <div key={book.bookId} className="bg-slate-800 rounded-lg p-4">
-          <h3 className="text-xl font-bold mb-4 text-center text-yellow-400">
+        <div key={book.bookId} className="bg-slate-800 rounded-lg p-3 w-80 flex-shrink-0">
+          <h3 className="text-lg font-bold mb-3 text-center text-yellow-400">
             {getPlayerName(book.ownerId)}'s Book
           </h3>
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
             {book.entries.map((entry, index) => (
-              <div key={index} className="bg-slate-700 p-3 rounded-lg text-center">
-                <p className="text-sm text-slate-400 mb-2">
+              <div key={index} className="bg-slate-700 p-2 rounded-md text-center">
+                <p className="text-xs text-slate-400 mb-1">
                   {entry.type === 'prompt' ? 'Initial Prompt by' : entry.type === 'drawing' ? 'Drawing by' : 'Caption by'} {getPlayerName(entry.authorId)}
                 </p>
                 {entry.type === 'prompt' && (
-                  <p className="text-2xl font-bold text-white">"{entry.content}"</p>
+                  <p className="text-lg font-semibold text-white">"{entry.content}"</p>
                 )}
                 {entry.type === 'caption' && (
-                  <p className="text-xl italic text-slate-300">"{entry.content}"</p>
+                  <p className="text-base italic text-slate-300">"{entry.content}"</p>
                 )}
                 {entry.type === 'drawing' && entry.content && (
-                  <img src={entry.content} alt="A drawing" className="bg-white rounded-md w-full max-w-sm mx-auto" />
+                  <img src={entry.content} alt="A drawing" className="bg-white rounded-sm w-full max-w-full mx-auto" />
                 )}
                  {entry.type === 'drawing' && !entry.content && (
-                  <div className="w-full max-w-sm mx-auto bg-slate-600 rounded-md aspect-video flex items-center justify-center">
-                    <p className="text-slate-400">[Drawing Timed Out]</p>
+                  <div className="w-full max-w-full mx-auto bg-slate-600 rounded-md aspect-video flex items-center justify-center">
+                    <p className="text-slate-400 text-sm">[Drawing Timed Out]</p>
                   </div>
                 )}
               </div>
