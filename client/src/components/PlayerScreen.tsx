@@ -303,7 +303,6 @@ export default function PlayerScreen() {
         setDpSelected('');
         if (nextRoom?.state !== 'DP_PICK') setDpChoices([]);
         // Reset SSS state on new turn/state
-        setSssTurnData(null);
         setSssCaptionDraft('');
         setSssPromptDraft('');
       }
