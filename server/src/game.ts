@@ -67,6 +67,7 @@ interface Room {
     | 'SSS_DRAWING'
     | 'SSS_CAPTIONING'
     | 'SSS_REVEAL'
+    | 'SSS_RESULTS'
     | 'END';
   currentRound: number;
   totalRounds: number;
@@ -128,6 +129,7 @@ interface Room {
   sssTurn?: number;
   sssTotalTurns?: number;
   sssDrawTime?: 60 | 90 | 120; // Drawing/captioning time in seconds
+  sssScores?: Record<string, number>;
 
   answers: { playerId: string; answer: string }[];
   votes: Record<string, number>; // answerIndex -> count
