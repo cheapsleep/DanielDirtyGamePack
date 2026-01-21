@@ -152,20 +152,6 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
   const [ccIsDealing, setCcIsDealing] = useState<boolean>(false);
   const [ccDealingStep, setCcDealingStep] = useState<'shuffle' | 'deal' | 'flip' | 'done'>('done');
 
-  // Scribble Scrabble: Scrambled state
-  const [sssTimeLeft, setSssTimeLeft] = useState<number>(60);
-  const [sssResults, setSssResults] = useState<{
-    realDrawerId: string;
-    realPrompt: string;
-    allPrompts: Record<string, string>;
-    drawings: Record<string, string>;
-    votes: Record<string, string>;
-    roundScores: Record<string, { tricked: number; correct: boolean }>;
-    totalScores: Record<string, number>;
-    votesByTarget: Record<string, string[]>;
-  } | null>(null);
-  const [sssRevealPhase, setSssRevealPhase] = useState<'hidden' | 'revealing' | 'revealed'>('hidden');
-  
   // Initialize stroke receiver for SC
   const strokeReceiver = useStrokeReceiver();
   
@@ -297,11 +283,6 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
     const onCcGameEnd = () => { /* handled via room_update */ };
     const onCcDeckShuffled = () => { setCcIsShuffling(true); setTimeout(() => setCcIsShuffling(false), 1500); };
 
-    // SSS handlers
-    const onSssTimer = (data: { timeLeft: number }) => { setSssTimeLeft(data.timeLeft); };
-    const onSssResults = (data: any) => { setSssResults(data); setSssRevealPhase('hidden'); setTimeout(() => setSssRevealPhase('revealing'), 500); setTimeout(() => setSssRevealPhase('revealed'), 2500); };
-    const onSssGameEnd = () => { /* no-op */ };
-
     const onGameOver = () => { /* rely on room state 'END' */ };
 
     socket.on('new_prompt', onNewPrompt);
@@ -325,10 +306,6 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
     socket.on('cc_game_start', onCcGameStart);
     socket.on('cc_game_end', onCcGameEnd);
     socket.on('cc_deck_shuffled', onCcDeckShuffled);
-
-    socket.on('sss_timer', onSssTimer);
-    socket.on('sss_results', onSssResults);
-    socket.on('sss_game_end', onSssGameEnd);
 
     socket.on('game_over', onGameOver);
 
@@ -448,14 +425,12 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
             socket.off('sc_round_end', onScRoundEnd);
             socket.off('sc_game_end', onScGameEnd);
             socket.off('cc_timer', onCcTimer);
-            socket.off('cc_game_start', onCcGameStart);
-            socket.off('cc_game_end', onCcGameEnd);
-            socket.off('cc_deck_shuffled', onCcDeckShuffled);
-            socket.off('sss_timer', onSssTimer);
-            socket.off('sss_results', onSssResults);
-            socket.off('sss_game_end', onSssGameEnd);
-            socket.off('game_over', onGameOver);
-            socket.off('error');
+                        socket.off('cc_game_start', onCcGameStart);
+                        socket.off('cc_game_end', onCcGameEnd);
+                        socket.off('cc_deck_shuffled', onCcDeckShuffled);
+            
+                        socket.off('game_over', onGameOver);
+                        socket.off('error');
         };
   }, [gameId, retryKey, strokeReceiver]);
 

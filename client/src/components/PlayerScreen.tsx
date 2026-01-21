@@ -10,7 +10,6 @@ import AdsBanner from './AdsBanner';
 import ScribbleCanvas, { DrawingCanvasHandle } from './DrawingCanvas';
 import CardCalamityCard, { ColorPicker, ActiveColorIndicator, CCCard } from './CardCalamityCard';
 import CalamityExplosion from './CalamityExplosion';
-import TelephoneGallery from './TelephoneGallery';
 
 // Simple drawing canvas (for Dubiously Patented)
 function DrawingCanvas({ onChange }: { onChange: (data: string) => void }) {
