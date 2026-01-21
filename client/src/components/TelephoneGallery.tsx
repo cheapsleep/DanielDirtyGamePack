@@ -38,7 +38,7 @@ const TelephoneGallery: React.FC<TelephoneGalleryProps> = ({ books, players }) =
           <h3 className="text-lg font-bold mb-3 text-center text-yellow-400">
             {getPlayerName(book.ownerId)}'s Book
           </h3>
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 max-h-[400px] overflow-y-auto">
             {book.entries.map((entry, index) => (
               <div key={index} className="bg-slate-700 p-2 rounded-md text-center">
                 <p className="text-xs text-slate-400 mb-1">
