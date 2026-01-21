@@ -691,6 +691,7 @@ export default function PlayerScreen() {
   return (
     <div className="w-full h-screen max-h-screen p-2 sm:p-4 flex flex-col bg-slate-900 text-white overflow-y-auto">
       {calamityEvent && <CalamityExplosion event={calamityEvent} players={room?.players} />}
+      <RulesModal gameId={room?.gameId ?? gameId} open={rulesOpen} onClose={() => setRulesOpen(false)} />
       <div className="flex justify-between items-center mb-2 sm:mb-4 text-xs sm:text-sm text-slate-500 border-b border-slate-700 pb-1 sm:pb-2">
           <div className="flex items-center gap-2">
             {isInGame && (
@@ -970,7 +971,6 @@ export default function PlayerScreen() {
               <div className="text-center">
                 <h2 className="text-2xl font-bold mb-3">You’re playing this round</h2>
                 <p className="text-slate-400">Hang tight while others submit prompts.</p>
-                <RulesModal gameId={room?.gameId ?? gameId} open={rulesOpen} onClose={() => setRulesOpen(false)} />
               </div>
             ) : submitted ? (
               <div className="text-center">
