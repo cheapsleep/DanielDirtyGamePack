@@ -5,6 +5,7 @@ import { socket, socketServerUrl } from '../socket';
 import DrawingCanvas, { useStrokeReceiver } from './DrawingCanvas';
 import CardCalamityCard, { ActiveColorIndicator, DirectionIndicator, CCCard } from './CardCalamityCard';
 import ClientOnlyAds from './ClientOnlyAds';
+import TelephoneGallery from './TelephoneGallery';
 
 // Helper to render profile icon strings correctly as either a color or an image URL/data-uri
 function makeBg(v?: string | null) {
@@ -42,9 +43,10 @@ type GameState =
   | 'CC_PLAYING'
   | 'CC_PICK_COLOR'
   | 'CC_RESULTS'
+  | 'SSS_PROMPT_WRITING'
   | 'SSS_DRAWING'
-  | 'SSS_VOTING'
-  | 'SSS_RESULTS'
+  | 'SSS_CAPTIONING'
+  | 'SSS_REVEAL'
   | 'END';
 
 interface RoomState {
@@ -93,20 +95,21 @@ interface RoomState {
   ccWinnerId?: string;
   ccWinnerName?: string;
   ccPendingWildPlayerId?: string;
-  // Scribble Scrabble: Scrambled fields
-  sssRound?: number;
+  // Scribble Scrabble: Scrambled (Paper Telephone) fields
+  sssTurn?: number;
+  sssTotalTurns?: number;
   sssDrawTime?: number;
-  sssDoubleRounds?: boolean;
-  sssDrawingsSubmitted?: number;
-  sssVotesSubmitted?: number;
-  sssActivePlayerCount?: number;
+  sssPlayersFinished?: string[];
+  sssBooks?: {
+    bookId: string;
+    ownerId: string;
+    entries: {
+      type: 'prompt' | 'drawing' | 'caption';
+      authorId: string;
+      content: string;
+    }[];
+  }[];
   sssScores?: Record<string, number>;
-  sssDrawings?: Record<string, string>;
-  sssRealDrawerId?: string;
-  sssRealPrompt?: string;
-  sssAllPrompts?: Record<string, string>;
-  sssVotes?: Record<string, string>;
-  sssRoundScores?: Record<string, { tricked: number; correct: boolean }>;
 }
 
 import WoodenButton from './WoodenButton';
@@ -1427,248 +1430,41 @@ export default function HostScreen({ onBack, gameId }: HostScreenProps) {
             </div>
         )}
 
-        {/* Scribble Scrabble: Scrambled - Drawing */}
-        {room.state === 'SSS_DRAWING' && (
-            <div className="w-full h-full flex flex-col items-center justify-center">
-                <motion.div
-                    initial={{ y: -50, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    className="text-center mb-8"
-                >
-                    <h1 className="text-5xl font-black text-purple-400 mb-2">🎨 Drawing Time!</h1>
-                    <p className="text-2xl text-slate-300">Round {room.sssRound}/{room.totalRounds}</p>
-                </motion.div>
-                
-                <motion.div
-                    key={sssTimeLeft}
-                    initial={{ scale: 1.5 }}
-                    animate={{ scale: 1 }}
-                    className={`text-8xl font-black mb-8 ${
-                        sssTimeLeft <= 10 ? 'text-red-500' : 'text-purple-400'
-                    }`}
-                >
-                    {sssTimeLeft}
-                </motion.div>
-                
-                <div className="bg-slate-800 rounded-xl p-6 w-full max-w-md">
-                    <div className="flex justify-between items-center mb-4">
-                        <span className="text-xl font-bold text-slate-300">Drawings Submitted</span>
-                        <span className="text-3xl font-bold text-green-400">
-                            {room.sssDrawingsSubmitted ?? 0}/{room.sssActivePlayerCount ?? 0}
-                        </span>
+        {/* Scribble Scrabble: Scrambled - Host View */}
+        {(room.gameId ?? gameId) === 'scribble-scrabble-scrambled' && (
+            <>
+                {room.state === 'SSS_PROMPT_WRITING' && (
+                    <div className="text-center w-full max-w-4xl">
+                        <h1 className="text-5xl font-bold mb-6 leading-tight animate-pulse">Players are writing prompts...</h1>
+                        <div className="text-slate-300 text-2xl">
+                            {room.sssPlayersFinished?.length ?? 0} / {room.players.length} submitted
+                        </div>
                     </div>
-                    <div className="w-full h-4 bg-slate-700 rounded-full overflow-hidden">
-                        <motion.div
-                            className="h-full bg-green-500"
-                            initial={{ width: 0 }}
-                            animate={{ 
-                                width: `${((room.sssDrawingsSubmitted ?? 0) / (room.sssActivePlayerCount ?? 1)) * 100}%` 
-                            }}
-                            transition={{ duration: 0.3 }}
-                        />
+                )}
+
+                {(room.state === 'SSS_DRAWING' || room.state === 'SSS_CAPTIONING') && (
+                    <div className="text-center w-full max-w-4xl">
+                        <h2 className="text-3xl text-slate-400 mb-4">
+                            Turn {room.sssTurn} / {room.sssTotalTurns}
+                        </h2>
+                        <h1 className="text-5xl font-bold mb-6 leading-tight animate-pulse">
+                            {room.state === 'SSS_DRAWING' ? 'Players are drawing...' : 'Players are captioning...'}
+                        </h1>
+                         <div className="text-slate-300 text-2xl">
+                            {room.sssPlayersFinished?.length ?? 0} / {room.players.length} submitted
+                        </div>
                     </div>
-                </div>
-            </div>
-        )}
+                )}
 
-        {/* Scribble Scrabble: Scrambled - Voting */}
-        {room.state === 'SSS_VOTING' && (
-            <div className="w-full h-full flex flex-col items-center justify-center p-8">
-                <motion.div
-                    initial={{ y: -50, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    className="text-center mb-6"
-                >
-                    <h1 className="text-5xl font-black text-purple-400 mb-2">🗳️ Vote Time!</h1>
-                    <p className="text-2xl text-slate-300">Which drawing had the REAL prompt?</p>
-                </motion.div>
-                
-                <div className="bg-slate-800 rounded-xl p-4 mb-6">
-                    <span className="text-xl font-bold text-slate-300">Votes: </span>
-                    <span className="text-2xl font-bold text-green-400">
-                        {room.sssVotesSubmitted ?? 0}/{room.sssActivePlayerCount ?? 0}
-                    </span>
-                </div>
-                
-                {/* Drawing gallery */}
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 w-full max-w-6xl">
-                    {Object.entries(room.sssDrawings ?? {}).map(([playerId, drawing], index) => {
-                        const player = room.players.find(p => p.id === playerId);
-                        return (
-                            <motion.div
-                                key={playerId}
-                                initial={{ scale: 0, rotate: -10 }}
-                                animate={{ scale: 1, rotate: 0 }}
-                                transition={{ delay: index * 0.1 }}
-                                className="bg-white rounded-lg overflow-hidden shadow-lg"
-                            >
-                                {drawing ? (
-                                    <img
-                                        src={drawing}
-                                        alt={`Drawing by ${player?.name}`}
-                                        className="w-full aspect-[4/3] object-contain"
-                                    />
-                                ) : (
-                                    <div className="w-full aspect-[4/3] bg-slate-200 flex items-center justify-center">
-                                        <span className="text-slate-400">No drawing</span>
-                                    </div>
-                                )}
-                                <div className="p-2 bg-slate-900 text-center">
-                                    <span className="text-sm font-semibold text-slate-300">
-                                        {player?.name ?? 'Unknown'}
-                                    </span>
-                                </div>
-                            </motion.div>
-                        );
-                    })}
-                </div>
-            </div>
-        )}
-
-        {/* Scribble Scrabble: Scrambled - Results */}
-        {room.state === 'SSS_RESULTS' && sssResults && (
-            <div className="w-full h-full flex flex-col items-center justify-center p-8 overflow-y-auto">
-                {/* Reveal animation */}
-                <AnimatePresence mode="wait">
-                    {sssRevealPhase === 'hidden' && (
-                        <motion.div
-                            key="hidden"
-                            initial={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            className="text-center"
-                        >
-                            <h1 className="text-5xl font-black text-purple-400">Calculating results...</h1>
+                {room.state === 'SSS_REVEAL' && room.sssBooks && (
+                    <div className="w-full h-full flex flex-col items-center justify-center">
+                        <h1 className="text-5xl font-black text-purple-400 mb-6">The Big Reveal!</h1>
+                        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="w-full">
+                            <TelephoneGallery books={room.sssBooks} players={room.players} />
                         </motion.div>
-                    )}
-                    
-                    {sssRevealPhase === 'revealing' && (
-                        <motion.div
-                            key="revealing"
-                            initial={{ scale: 0, rotate: -180 }}
-                            animate={{ scale: 1, rotate: 0 }}
-                            exit={{ scale: 0.8, opacity: 0 }}
-                            transition={{ type: 'spring', stiffness: 200 }}
-                            className="text-center"
-                        >
-                            <div className="bg-gradient-to-r from-yellow-500 to-orange-500 rounded-2xl p-8 mb-4 shadow-2xl">
-                                <p className="text-2xl text-white/80 mb-2">THE REAL PROMPT WAS:</p>
-                                <p className="text-5xl font-black text-white">{sssResults.realPrompt}</p>
-                                <p className="text-xl text-white/80 mt-4">
-                                    Drawn by: {room.players.find(p => p.id === sssResults.realDrawerId)?.name}
-                                </p>
-                            </div>
-                        </motion.div>
-                    )}
-                    
-                    {sssRevealPhase === 'revealed' && (
-                        <motion.div
-                            key="revealed"
-                            initial={{ opacity: 0, y: 50 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="w-full max-w-5xl"
-                        >
-                            {/* Real prompt banner */}
-                            <div className="bg-gradient-to-r from-yellow-500 to-orange-500 rounded-xl p-4 mb-6 text-center">
-                                <p className="text-lg text-white/80">THE REAL PROMPT:</p>
-                                <p className="text-3xl font-black text-white">{sssResults.realPrompt}</p>
-                            </div>
-                            
-                            {/* Drawing grid with prompts revealed */}
-                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
-                                {Object.entries(sssResults.drawings).map(([playerId, drawing], index) => {
-                                    const player = room.players.find(p => p.id === playerId);
-                                    const isReal = playerId === sssResults.realDrawerId;
-                                    const prompt = sssResults.allPrompts[playerId];
-                                    const votesReceived = sssResults.votesByTarget[playerId]?.length ?? 0;
-                                    
-                                    return (
-                                        <motion.div
-                                            key={playerId}
-                                            initial={{ scale: 0 }}
-                                            animate={{ scale: 1 }}
-                                            transition={{ delay: index * 0.1 }}
-                                            className={`rounded-lg overflow-hidden shadow-lg ${
-                                                isReal ? 'ring-4 ring-yellow-400' : ''
-                                            }`}
-                                        >
-                                            {drawing ? (
-                                                <img
-                                                    src={drawing}
-                                                    alt={`Drawing by ${player?.name}`}
-                                                    className="w-full aspect-[4/3] object-contain bg-white"
-                                                />
-                                            ) : (
-                                                <div className="w-full aspect-[4/3] bg-slate-200 flex items-center justify-center">
-                                                    <span className="text-slate-400">No drawing</span>
-                                                </div>
-                                            )}
-                                            <div className={`p-2 text-center ${
-                                                isReal ? 'bg-yellow-600' : 'bg-slate-800'
-                                            }`}>
-                                                <p className="font-bold text-white">{player?.name}</p>
-                                                <p className="text-sm text-white/80 truncate">"{prompt}"</p>
-                                                {isReal && (
-                                                    <span className="text-xs bg-yellow-400 text-black px-2 py-0.5 rounded mt-1 inline-block">
-                                                        REAL PROMPT
-                                                    </span>
-                                                )}
-                                                {votesReceived > 0 && (
-                                                    <p className="text-xs text-white/60 mt-1">
-                                                        {votesReceived} vote{votesReceived !== 1 ? 's' : ''}
-                                                    </p>
-                                                )}
-                                            </div>
-                                        </motion.div>
-                                    );
-                                })}
-                            </div>
-                            
-                            {/* Scores */}
-                            <div className="bg-slate-800 rounded-xl p-4">
-                                <h3 className="text-xl font-bold text-slate-300 mb-3 text-center">Current Standings</h3>
-                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                                    {Object.entries(sssResults.totalScores)
-                                        .sort(([,a], [,b]) => b - a)
-                                        .map(([playerId, score], idx) => {
-                                            const player = room.players.find(p => p.id === playerId);
-                                            const roundScore = sssResults.roundScores[playerId];
-                                            const roundPoints = (roundScore?.tricked ?? 0) + (roundScore?.correct ? 2 : 0);
-                                            
-                                            return (
-                                                <motion.div
-                                                    key={playerId}
-                                                    initial={{ x: -20, opacity: 0 }}
-                                                    animate={{ x: 0, opacity: 1 }}
-                                                    transition={{ delay: 0.5 + idx * 0.1 }}
-                                                    className={`p-3 rounded-lg ${
-                                                        idx === 0 ? 'bg-yellow-900/50 border border-yellow-500' : 'bg-slate-900'
-                                                    }`}
-                                                >
-                                                    <div className="flex justify-between items-center">
-                                                        <div className="flex items-center gap-3">
-                                                          <div className="w-10 h-10 rounded-full" style={{ background: (player as any)?.profileIcon ?? '#444' }} />
-                                                          <span className="font-bold">{idx === 0 ? '👑' : `#${idx + 1}`} {player?.name}</span>
-                                                        </div>
-                                                        <span className="text-green-400 font-bold">{score}</span>
-                                                    </div>
-                                                    {roundPoints > 0 && (
-                                                        <motion.div
-                                                            initial={{ scale: 0 }}
-                                                            animate={{ scale: 1 }}
-                                                            className="text-sm text-green-300 mt-1"
-                                                        >
-                                                            +{roundPoints} this round
-                                                        </motion.div>
-                                                    )}
-                                                </motion.div>
-                                            );
-                                        })}
-                                </div>
-                            </div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-            </div>
+                    </div>
+                )}
+            </>
         )}
 
         {room.state === 'END' && (

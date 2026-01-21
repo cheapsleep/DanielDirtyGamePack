@@ -597,6 +597,50 @@ export default function PlayerScreen() {
     setSubmitted(true);
   }
 
+  const downloadBook = (book: any, players: any[], filename: string) => {
+    const owner = players.find(p => p.id === book.ownerId);
+    let html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Your Telephone Book</title>
+            <style>
+                body { font-family: sans-serif; background-color: #1E293B; color: #F1F5F9; padding: 20px; }
+                .entry { border: 1px solid #475569; border-radius: 8px; margin-bottom: 20px; padding: 15px; background-color: #334155; }
+                .author { font-weight: bold; color: #94A3B8; }
+                .prompt { font-size: 1.2em; }
+                img { max-width: 100%; border-radius: 4px; }
+            </style>
+        </head>
+        <body>
+            <h1>Telephone Book started by ${owner?.name ?? 'Unknown'}</h1>
+    `;
+
+    for (const entry of book.entries) {
+        const author = players.find(p => p.id === entry.authorId);
+        html += '<div class="entry">';
+        html += `<div class="author">By: ${author?.name ?? 'Unknown'}</div>`;
+        if (entry.type === 'prompt' || entry.type === 'caption') {
+            html += `<p class="prompt">${entry.content}</p>`;
+        } else if (entry.type === 'drawing') {
+            html += `<img src="${entry.content}" alt="Drawing by ${author?.name ?? 'Unknown'}" />`;
+        }
+        html += '</div>';
+    }
+
+    html += '</body></html>';
+
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   if (!joined) {
     return (
       <div className="w-full max-w-md p-8 flex flex-col items-center justify-center min-h-screen">
@@ -1929,19 +1973,32 @@ export default function PlayerScreen() {
 
             {/* SSS_REVEAL */}
             {gameState === 'SSS_REVEAL' && (
-              <div className="w-full max-w-3xl mx-auto text-center">
-                <h2 className="text-3xl font-bold text-purple-400 mb-4">The big reveal!</h2>
-                <p className="text-slate-400 mb-6">Check out how things went off the rails.</p>
-                {room.sssBooks && room.players && (
-                  <TelephoneGallery books={room.sssBooks} players={room.players as any} />
-                )}
-                {isController && (
-                  <div className="mt-8">
-                    <WoodenButton type="button" variant="red" onClick={() => socket.emit('game_action', { action: 'PLAY_AGAIN' })}>
-                      PLAY AGAIN
-                    </WoodenButton>
-                  </div>
-                )}
+              <div className="w-full max-w-lg mx-auto text-center">
+                  <h2 className="text-3xl font-bold text-purple-400 mb-4">The big reveal!</h2>
+                  <p className="text-slate-400 mb-6">Look at the main screen to see how things went off the rails.</p>
+                  
+                  <WoodenButton
+                      type="button"
+                      variant="wood"
+                      onClick={() => {
+                          if (room?.sssBooks && room?.players) {
+                              const myBook = room.sssBooks.find(b => b.ownerId === playerId);
+                              if (myBook) {
+                                  downloadBook(myBook, room.players, `My_Telephone_Book_${room.code}.html`);
+                              }
+                          }
+                      }}
+                  >
+                      Download My Book
+                  </WoodenButton>
+
+                  {isController && (
+                    <div className="mt-8">
+                      <WoodenButton type="button" variant="red" onClick={() => socket.emit('game_action', { action: 'PLAY_AGAIN' })}>
+                        PLAY AGAIN
+                      </WoodenButton>
+                    </div>
+                  )}
               </div>
             )}
           </>
