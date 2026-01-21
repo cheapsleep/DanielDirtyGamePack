@@ -10,6 +10,7 @@ import AdsBanner from './AdsBanner';
 import ScribbleCanvas, { DrawingCanvasHandle } from './DrawingCanvas';
 import CardCalamityCard, { ColorPicker, ActiveColorIndicator, CCCard } from './CardCalamityCard';
 import CalamityExplosion from './CalamityExplosion';
+import TelephoneGallery from './TelephoneGallery';
 
 // Simple drawing canvas (for Dubiously Patented)
 function DrawingCanvas({ onChange }: { onChange: (data: string) => void }) {
@@ -133,9 +134,10 @@ type GameState =
   | 'CC_PLAYING'
   | 'CC_PICK_COLOR'
   | 'CC_RESULTS'
+  | 'SSS_PROMPT_WRITING'
   | 'SSS_DRAWING'
-  | 'SSS_VOTING'
-  | 'SSS_RESULTS'
+  | 'SSS_CAPTIONING'
+  | 'SSS_REVEAL'
   | 'END';
 
 interface RoomPublicState {
@@ -176,20 +178,21 @@ interface RoomPublicState {
   ccWinnerId?: string;
   ccWinnerName?: string;
   ccPendingWildPlayerId?: string;
-  // Scribble Scrabble: Scrambled fields
-  sssRound?: number;
+  // Scribble Scrabble: Scrambled (Paper Telephone) fields
+  sssTurn?: number;
+  sssTotalTurns?: number;
   sssDrawTime?: number;
-  sssDoubleRounds?: boolean;
-  sssDrawingsSubmitted?: number;
-  sssVotesSubmitted?: number;
-  sssActivePlayerCount?: number;
+  sssPlayersFinished?: string[];
+  sssBooks?: {
+    bookId: string;
+    ownerId: string;
+    entries: {
+      type: 'prompt' | 'drawing' | 'caption';
+      authorId: string;
+      content: string;
+    }[];
+  }[];
   sssScores?: Record<string, number>;
-  sssDrawings?: Record<string, string>;
-  sssRealDrawerId?: string;
-  sssRealPrompt?: string;
-  sssAllPrompts?: Record<string, string>;
-  sssVotes?: Record<string, string>;
-  sssRoundScores?: Record<string, { tricked: number; correct: boolean }>;
 }
 
 export default function PlayerScreen() {
@@ -242,25 +245,10 @@ export default function PlayerScreen() {
   const [ccTimeLeft, setCcTimeLeft] = useState(30);
   const [ccSelectedCardId, setCcSelectedCardId] = useState<string | null>(null);
   // Scribble Scrabble: Scrambled state
-  const [sssPrompt, setSssPrompt] = useState<string>('');
-  const [sssIsRealPrompt, setSssIsRealPrompt] = useState<boolean>(false);
-  const [sssTimeLeft, setSssTimeLeft] = useState<number>(60);
-  const [sssDrawingSubmitted, setSssDrawingSubmitted] = useState<boolean>(false);
-  const [sssSelectedVote, setSssSelectedVote] = useState<string | null>(null);
-  const [sssVoteSubmitted, setSssVoteSubmitted] = useState<boolean>(false);
-  const [sssResults, setSssResults] = useState<{
-    realDrawerId: string;
-    realPrompt: string;
-    allPrompts: Record<string, string>;
-    drawings: Record<string, string>;
-    votes: Record<string, string>;
-    roundScores?: Record<string, { tricked: number; correct: boolean }>;
-    roundSummary?: Record<string, { tricked: number; correct: boolean }>;
-    totalScores?: Record<string, number>;
-    votesByTarget?: Record<string, string[]>;
-    topDrawings?: Array<{ playerId: string; drawing: string; votes: number; name: string }>;
-    topPrompts?: Array<{ playerId: string; prompt: string; votes: number; name: string }>;
-  } | null>(null);
+  const [sssTurnData, setSssTurnData] = useState<{ type: 'prompt' | 'drawing', content: string } | null>(null);
+  const [sssTimeLeft, setSssTimeLeft] = useState<number>(90);
+  const [sssPromptDraft, setSssPromptDraft] = useState('');
+  const [sssCaptionDraft, setSssCaptionDraft] = useState('');
   const sssCanvasRef = useRef<DrawingCanvasHandle>(null);
 
   useEffect(() => {
@@ -314,6 +302,10 @@ export default function PlayerScreen() {
         setPromptDraft('');
         setDpSelected('');
         if (nextRoom?.state !== 'DP_PICK') setDpChoices([]);
+        // Reset SSS state on new turn/state
+        setSssTurnData(null);
+        setSssCaptionDraft('');
+        setSssPromptDraft('');
       }
 
       // When the game ends, report stats for the current player (if present)
@@ -405,17 +397,11 @@ export default function PlayerScreen() {
     socket.on('cc_game_end', onCcGameEnd);
 
     // Scribble Scrabble: Scrambled events
-    const onSssPrompt = (data: { prompt: string; isReal: boolean }) => { setSssPrompt(data.prompt); setSssIsRealPrompt(data.isReal); setSssDrawingSubmitted(false); setSssVoteSubmitted(false); setSssSelectedVote(null); setSssResults(null); };
-    socket.on('sss_prompt', onSssPrompt);
+    const onSssTurnData = (data: { type: 'prompt' | 'drawing', content: string }) => { setSssTurnData(data); };
+    socket.on('sss_turn_data', onSssTurnData);
 
     const onSssTimer = (data: { timeLeft: number }) => { setSssTimeLeft(data.timeLeft); };
     socket.on('sss_timer', onSssTimer);
-
-    const onSssResults = (data: any) => { setSssResults(data); };
-    socket.on('sss_results', onSssResults);
-
-    const onSssGameEnd = () => { /* handled by room state change */ };
-    socket.on('sss_game_end', onSssGameEnd);
 
     const onError = (data: any) => {
         if (data?.code === 'GAME_ERROR') {
@@ -487,10 +473,8 @@ export default function PlayerScreen() {
       socket.off('cc_timer', onCcTimer);
       socket.off('cc_invalid_play', onCcInvalidPlay);
       socket.off('cc_game_end', onCcGameEnd);
-      socket.off('sss_prompt', onSssPrompt);
+      socket.off('sss_turn_data', onSssTurnData);
       socket.off('sss_timer', onSssTimer);
-      socket.off('sss_results', onSssResults);
-      socket.off('sss_game_end', onSssGameEnd);
       socket.off('error', onError);
       socket.off('connect_error', onConnectError);
       socket.off('room_closed', onRoomClosed);
@@ -593,6 +577,26 @@ export default function PlayerScreen() {
       socket.emit('game_action', { action: 'SUBMIT_VOTE', voteIndex: index });
       setSubmitted(true);
   };
+
+  const handleSssSubmitPrompt = () => {
+    if (!sssPromptDraft.trim()) return;
+    socket.emit('game_action', { action: 'SSS_SUBMIT_PROMPT', prompt: sssPromptDraft.trim() });
+    setSubmitted(true);
+  }
+
+  const handleSssSubmitDrawing = () => {
+    if (sssCanvasRef.current) {
+      const drawing = sssCanvasRef.current.getDataURL();
+      socket.emit('game_action', { action: 'SSS_SUBMIT_DRAWING', drawing });
+      setSubmitted(true);
+    }
+  }
+
+  const handleSssSubmitCaption = () => {
+    if (!sssCaptionDraft.trim()) return;
+    socket.emit('game_action', { action: 'SSS_SUBMIT_CAPTION', caption: sssCaptionDraft.trim() });
+    setSubmitted(true);
+  }
 
   if (!joined) {
     return (
@@ -881,14 +885,14 @@ export default function PlayerScreen() {
                         <h3 className="text-lg font-bold text-purple-400 mb-3">Game Settings</h3>
                         <div className="flex flex-col gap-4">
                           <div>
-                            <label className="text-sm text-slate-400 block mb-1">Draw Time:</label>
+                            <label className="text-sm text-slate-400 block mb-1">Time per turn:</label>
                             <div className="flex gap-2 justify-center">
-                              {[60, 90].map(sec => (
+                              {[60, 90, 120].map(sec => (
                                 <button
                                   key={sec}
                                   onClick={() => socket.emit('game_action', { action: 'SSS_SET_DRAW_TIME', time: sec })}
                                   className={`px-4 py-2 rounded font-bold flex-1 ${
-                                    (room?.sssDrawTime ?? 60) === sec 
+                                    (room?.sssDrawTime ?? 90) === sec 
                                       ? 'bg-purple-500 text-black' 
                                       : 'bg-slate-700 text-white'
                                   }`}
@@ -897,24 +901,6 @@ export default function PlayerScreen() {
                                 </button>
                               ))}
                             </div>
-                          </div>
-                          <div>
-                            <label className="text-sm text-slate-400 block mb-1">Double Rounds:</label>
-                            <button
-                              onClick={() => socket.emit('game_action', { action: 'SSS_SET_DOUBLE_ROUNDS', enabled: !room?.sssDoubleRounds })}
-                              className={`px-4 py-2 rounded font-bold w-full ${
-                                room?.sssDoubleRounds 
-                                  ? 'bg-purple-500 text-black' 
-                                  : 'bg-slate-700 text-white'
-                              }`}
-                            >
-                              {room?.sssDoubleRounds ? '✓ ON (2× Rounds)' : '✗ OFF (Normal)'}
-                            </button>
-                            <p className="text-xs text-slate-500 mt-1">
-                              {room?.sssDoubleRounds 
-                                ? 'Each player gets the real prompt twice' 
-                                : 'Each player gets the real prompt once'}
-                            </p>
                           </div>
                         </div>
                       </div>
@@ -1832,243 +1818,136 @@ export default function PlayerScreen() {
           </div>
         )}
 
-        {/* Scribble Scrabble: Scrambled - Drawing */}
-        {gameState === 'SSS_DRAWING' && (
-          <div className="w-full max-w-lg mx-auto px-1 sm:px-0">
-            <div className="text-center mb-4">
-              <div className="text-4xl font-bold text-purple-400 mb-1">
-                {sssTimeLeft}<span className="text-xl">s</span>
-              </div>
-              <p className="text-slate-400 text-sm">Round {room?.sssRound}/{room?.totalRounds}</p>
-            </div>
-            
-            {sssIsRealPrompt && (
-              <motion.div
-                initial={{ scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                className="bg-gradient-to-r from-yellow-600 to-orange-600 rounded-lg p-3 mb-4 text-center"
-              >
-                <p className="text-lg font-bold text-white">🎯 YOU HAVE THE REAL PROMPT!</p>
-              </motion.div>
-            )}
-            
-            <div className="bg-slate-800 rounded-lg p-4 mb-4 text-center">
-              <p className="text-slate-400 text-sm mb-1">Your prompt:</p>
-              <p className="text-2xl font-bold text-white">{sssPrompt}</p>
-            </div>
-            
-            {sssDrawingSubmitted ? (
-              <div className="text-center py-8">
-                <motion.div
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  className="text-green-400 text-2xl font-bold mb-2"
-                >
-                  ✓ Drawing Submitted!
-                </motion.div>
-                <p className="text-slate-400">
-                  Waiting for others... ({room?.sssDrawingsSubmitted}/{room?.sssActivePlayerCount})
-                </p>
-              </div>
-            ) : (
-              <>
-                <div className="w-full flex justify-center mb-2">
-                  <div className="w-full max-w-xs">
-                    <ScribbleCanvas
-                      ref={sssCanvasRef}
-                      mode="draw"
-                      width={400}
-                      height={300}
-                      onStroke={() => {}}
-                      onClear={() => {}}
-                      className="w-full h-auto mx-auto rounded-lg"
+        {/* Scribble Scrabble: Scrambled - Paper Telephone */}
+        {gameId === 'scribble-scrabble-scrambled' && room && (
+          <>
+            {/* SSS_PROMPT_WRITING */}
+            {gameState === 'SSS_PROMPT_WRITING' && (
+              <div className="w-full max-w-lg mx-auto text-center">
+                <div className="text-4xl font-bold text-purple-400 mb-2">
+                  {sssTimeLeft}<span className="text-xl">s</span>
+                </div>
+                <h2 className="text-2xl font-bold text-purple-400 mb-2">Let's get creative!</h2>
+                <p className="text-slate-400 mb-4">Write a funny or weird prompt to start things off.</p>
+
+                {submitted ? (
+                  <div className="py-8">
+                    <p className="text-slate-400 text-lg">Waiting for other players to write their prompts...</p>
+                    <p className="text-sm text-slate-500 mt-2">({room.sssPlayersFinished?.length ?? 0}/{totalPlayers})</p>
+                  </div>
+                ) : (
+                  <form onSubmit={(e) => { e.preventDefault(); handleSssSubmitPrompt(); }} className="flex flex-col gap-3">
+                    <textarea
+                      value={sssPromptDraft}
+                      onChange={(e) => setSssPromptDraft(e.target.value)}
+                      placeholder="e.g., a duck wearing a top hat"
+                      className="w-full h-32 p-4 bg-slate-800 rounded-lg text-lg focus:ring-2 focus:ring-purple-500 outline-none resize-none"
+                      maxLength={100}
                     />
-                  </div>
-                </div>
-                <WoodenButton
-                  type="button"
-                  variant="red"
-                  onClick={() => {
-                    if (sssCanvasRef.current) {
-                      const drawing = sssCanvasRef.current.getDataURL();
-                      socket.emit('game_action', { action: 'SSS_SUBMIT_DRAWING', drawing });
-                      setSssDrawingSubmitted(true);
-                    }
-                  }}
-                  className="w-full py-2 text-base sm:text-lg"
-                >
-                  SUBMIT DRAWING
-                </WoodenButton>
-              </>
-            )}
-          </div>
-        )}
-
-        {/* Scribble Scrabble: Scrambled - Voting */}
-        {gameState === 'SSS_VOTING' && (
-          <div className="w-full max-w-lg mx-auto px-1 sm:px-0">
-            <div className="text-center mb-4">
-              <h2 className="text-2xl font-bold text-purple-400 mb-2">🗳️ Vote!</h2>
-              <p className="text-slate-400">Which drawing had the REAL prompt?</p>
-              <p className="text-sm text-slate-500 mt-1">
-                Votes: {room?.sssVotesSubmitted}/{room?.sssActivePlayerCount}
-              </p>
-            </div>
-            
-            {sssVoteSubmitted ? (
-              <div className="text-center py-8">
-                <motion.div
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  className="text-green-400 text-2xl font-bold mb-2"
-                >
-                  ✓ Vote Submitted!
-                </motion.div>
-                <p className="text-slate-400">Waiting for others...</p>
+                    <WoodenButton type="submit" variant="red" className="w-full">
+                      SUBMIT PROMPT
+                    </WoodenButton>
+                  </form>
+                )}
               </div>
-            ) : (
-              <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 mb-2 sm:mb-4">
-                  {Object.entries(room?.sssDrawings ?? {})
-                    .filter(([pid]) => pid !== playerId)
-                    .map(([pid, drawing]) => {
-                      const player = room?.players?.find(p => p.id === pid);
-                      const isSelected = sssSelectedVote === pid;
-                      return (
-                        <motion.button
-                          key={pid}
-                          onClick={() => setSssSelectedVote(pid)}
-                          className={`relative rounded-lg overflow-hidden border-4 transition-all ${
-                            isSelected
-                              ? 'border-purple-500 scale-105'
-                              : 'border-transparent hover:border-slate-600'
-                          }`}
-                          whileTap={{ scale: 0.95 }}
-                        >
-                          {drawing ? (
-                            <img
-                              src={drawing}
-                              alt={`Drawing by ${player?.name}`}
-                              className="w-full aspect-[4/3] object-contain bg-white max-w-full h-auto"
-                            />
-                          ) : (
-                            <div className="w-full aspect-[4/3] bg-slate-700 flex items-center justify-center">
-                              <span className="text-slate-500">No drawing</span>
-                            </div>
-                          )}
-                          {isSelected && (
-                            <div className="absolute top-2 right-2 bg-purple-500 text-white rounded-full w-6 h-6 flex items-center justify-center">
-                              ✓
-                            </div>
-                          )}
-                        </motion.button>
-                      );
-                    })}
+            )}
+
+            {/* SSS_DRAWING */}
+            {gameState === 'SSS_DRAWING' && (
+              <div className="w-full max-w-lg mx-auto text-center">
+                <div className="text-4xl font-bold text-purple-400 mb-2">
+                  {sssTimeLeft}<span className="text-xl">s</span>
                 </div>
+                <h2 className="text-2xl font-bold text-purple-400 mb-2">Time to draw!</h2>
                 
-                <WoodenButton
-                  type="button"
-                  variant="red"
-                  onClick={() => {
-                    if (sssSelectedVote) {
-                      socket.emit('game_action', { action: 'SSS_VOTE', votedForPlayerId: sssSelectedVote });
-                      setSssVoteSubmitted(true);
-                    }
-                  }}
-                  disabled={!sssSelectedVote}
-                  className={`w-full py-2 text-base sm:text-lg ${!sssSelectedVote ? 'opacity-50' : ''}`}
-                >
-                  CONFIRM VOTE
-                </WoodenButton>
-              </>
-            )}
-          </div>
-        )}
-
-        {/* Scribble Scrabble: Scrambled - Results (vote-based reveal) */}
-        {gameState === 'SSS_RESULTS' && sssResults && (
-          <div className="w-full max-w-lg mx-auto">
-            <div className="text-center mb-4">
-              <h2 className="text-2xl font-bold text-purple-400 mb-2">📣 Reveal: Votes & Winners</h2>
-              <p className="text-slate-400">Round {room?.sssRound}/{room?.totalRounds}</p>
-            </div>
-
-            {/* Real prompt reveal */}
-            <div className="bg-gradient-to-r from-yellow-600 to-orange-600 rounded-lg p-4 mb-4 text-center">
-              <p className="text-sm text-white/80 mb-1">The REAL prompt was:</p>
-              <p className="text-xl font-bold text-white">{sssResults.realPrompt}</p>
-              <p className="text-sm text-white/80 mt-1">
-                by {room?.players?.find(p => p.id === sssResults.realDrawerId)?.name}
-                {sssResults.realDrawerId === playerId && " (You!)"}
-              </p>
-            </div>
-
-            {/* Top drawings */}
-            <div className="bg-slate-800 rounded-lg p-4 mb-4">
-              <h3 className="font-bold text-white mb-3">Top Drawings (by votes)</h3>
-              <div className="grid grid-cols-1 gap-3">
-                {(sssResults.topDrawings ?? []).map((d: any, i: number) => (
-                  <div key={d.playerId} className={`flex gap-3 items-center p-2 rounded ${i === 0 ? 'ring-2 ring-yellow-400' : 'bg-slate-700'}`}>
-                    <div className="w-20 h-16 bg-white rounded overflow-hidden flex items-center justify-center">
-                      {d.drawing ? <img src={d.drawing} alt={`Top ${i+1}`} className="w-full h-full object-contain" /> : <div className="text-slate-400">No drawing</div>}
-                    </div>
-                    <div className="flex-1 text-left">
-                      <div className="font-semibold">{d.name}</div>
-                      <div className="text-sm text-slate-400">Votes: {d.votes}</div>
-                    </div>
+                {submitted ? (
+                  <div className="py-8">
+                    <p className="text-slate-400 text-lg">Waiting for other players to finish drawing...</p>
+                    <p className="text-sm text-slate-500 mt-2">({room.sssPlayersFinished?.length ?? 0}/{totalPlayers})</p>
                   </div>
-                ))}
-                {((sssResults.topDrawings ?? []).length === 0) && (
-                  <div className="text-slate-400">No votes recorded.</div>
+                ) : sssTurnData && sssTurnData.type === 'prompt' ? (
+                  <div className="flex flex-col gap-3">
+                    <div className="bg-slate-800 rounded-lg p-3">
+                      <p className="text-slate-400 text-sm mb-1">Your prompt to draw:</p>
+                      <p className="text-xl font-semibold text-white">{sssTurnData.content}</p>
+                    </div>
+                    <div className="w-full flex justify-center">
+                       <ScribbleCanvas
+                          ref={sssCanvasRef}
+                          mode="draw"
+                          width={400}
+                          height={300}
+                          onStroke={() => {}}
+                          onClear={() => {}}
+                          className="w-full h-auto mx-auto rounded-lg"
+                        />
+                    </div>
+                    <WoodenButton type="button" variant="red" onClick={handleSssSubmitDrawing} className="w-full">
+                      SUBMIT DRAWING
+                    </WoodenButton>
+                  </div>
+                ) : (
+                  <p className="text-slate-500">Waiting for prompt...</p>
                 )}
               </div>
-            </div>
+            )}
 
-            {/* Top prompts */}
-            <div className="bg-slate-800 rounded-lg p-4 mb-4">
-              <h3 className="font-bold text-white mb-3">Top Prompts (by votes)</h3>
-              <div className="space-y-2 text-sm">
-                {(sssResults.topPrompts ?? []).map((p: any, i: number) => (
-                  <div key={p.playerId} className={`${i === 0 ? 'text-yellow-400 font-semibold' : 'text-slate-300'}`}>
-                    {p.name}: "{p.prompt}" — Votes: {p.votes}
+            {/* SSS_CAPTIONING */}
+            {gameState === 'SSS_CAPTIONING' && (
+              <div className="w-full max-w-lg mx-auto text-center">
+                <div className="text-4xl font-bold text-purple-400 mb-2">
+                  {sssTimeLeft}<span className="text-xl">s</span>
+                </div>
+                <h2 className="text-2xl font-bold text-purple-400 mb-2">What is this?!</h2>
+                <p className="text-slate-400 mb-4">Write a caption for the drawing below.</p>
+
+                {submitted ? (
+                  <div className="py-8">
+                    <p className="text-slate-400 text-lg">Waiting for other players to finish captioning...</p>
+                     <p className="text-sm text-slate-500 mt-2">({room.sssPlayersFinished?.length ?? 0}/{totalPlayers})</p>
                   </div>
-                ))}
-                {((sssResults.topPrompts ?? []).length === 0) && (
-                  <div className="text-slate-400">No prompts recorded.</div>
+                ) : sssTurnData && sssTurnData.type === 'drawing' ? (
+                  <form onSubmit={(e) => { e.preventDefault(); handleSssSubmitCaption(); }} className="flex flex-col gap-3">
+                    <div className="bg-white rounded-lg p-2">
+                      <img src={sssTurnData.content} alt="Drawing to caption" className="w-full h-auto" />
+                    </div>
+                    <textarea
+                      value={sssCaptionDraft}
+                      onChange={(e) => setSssCaptionDraft(e.target.value)}
+                      placeholder="e.g., a fancy duck"
+                      className="w-full h-24 p-4 bg-slate-800 rounded-lg text-lg focus:ring-2 focus:ring-purple-500 outline-none resize-none"
+                      maxLength={100}
+                    />
+                    <WoodenButton type="submit" variant="red" className="w-full">
+                      SUBMIT CAPTION
+                    </WoodenButton>
+                  </form>
+                ) : (
+                   <p className="text-slate-500">Waiting for drawing...</p>
                 )}
               </div>
-            </div>
-
-            {/* Vote breakdown (optional) */}
-            <div className="bg-slate-800 rounded-lg p-4 mb-4">
-              <h3 className="font-bold text-white mb-2">Vote Breakdown</h3>
-              <div className="text-sm text-slate-300">
-                {Object.entries(sssResults.votesByTarget ?? {}).map(([pid, voters]) => {
-                  const player = room?.players?.find(p => p.id === pid);
-                  return (
-                    <div key={pid} className="mb-1">
-                      <span className="font-semibold">{player?.name ?? pid}</span>: {voters.length} vote(s)
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {isController && (
-              <WoodenButton
-                type="button"
-                variant="red"
-                onClick={() => {
-                  socket.emit('game_action', { action: 'NEXT_ROUND' });
-                }}
-                className="w-full"
-              >
-                {(room?.sssRound ?? 0) < (room?.totalRounds ?? 0) ? 'NEXT ROUND' : 'SEE FINAL RESULTS'}
-              </WoodenButton>
             )}
-          </div>
-        )}
 
+            {/* SSS_REVEAL */}
+            {gameState === 'SSS_REVEAL' && (
+              <div className="w-full max-w-3xl mx-auto text-center">
+                <h2 className="text-3xl font-bold text-purple-400 mb-4">The big reveal!</h2>
+                <p className="text-slate-400 mb-6">Check out how things went off the rails.</p>
+                {room.sssBooks && room.players && (
+                  <TelephoneGallery books={room.sssBooks} players={room.players as any} />
+                )}
+                {isController && (
+                  <div className="mt-8">
+                    <WoodenButton type="button" variant="red" onClick={() => socket.emit('game_action', { action: 'PLAY_AGAIN' })}>
+                      PLAY AGAIN
+                    </WoodenButton>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
+        
         {gameState === 'END' && (
             <div className="text-center">
                 <h2 className="text-3xl font-bold mb-4">GAME OVER</h2>

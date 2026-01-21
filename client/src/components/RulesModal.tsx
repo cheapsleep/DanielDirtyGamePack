@@ -107,24 +107,24 @@ function getRules(gameId?: string) {
 					<div>
 						<p className="font-semibold">Overview</p>
 						<p>
-							Players take turns in a chain: the first player writes a short text prompt, the next player draws it, the next writes a caption describing the drawing, then the next draws that caption, and so on until the chain returns to the origin — then the full chain is revealed for laughs.
+							A hilarious chain game of drawing and description. One player starts with a text prompt, the next player draws it, the next describes the drawing, and so on. See how wildly things change from the original idea!
 						</p>
 					</div>
 					<div>
-						<p className="font-semibold">Round Flow (short)</p>
+						<p className="font-semibold">Round Flow</p>
 						<ul className="list-disc pl-5">
-							<li>Round starts with a text prompt from the first player.</li>
-							<li>Players alternate: draw → caption → draw → caption until every player has contributed (full circle).</li>
-							<li>After the chain completes, everyone votes for the funniest or best item (drawing or caption).</li>
-							<li>No scores are awarded — votes are shown and the top two items are highlighted.</li>
+							<li>At the start, everyone writes a secret prompt to create a "book".</li>
+							<li>These books are then passed around the group.</li>
+							<li>For each book you receive, you'll either have to draw the previous person's caption, or write a caption for their drawing.</li>
+							<li>This continues until the books have made a full circle (or a longer loop for smaller groups).</li>
+							<li>At the end, all the books are revealed, showing the funny chain of transformations.</li>
 						</ul>
 					</div>
 					<div>
 						<p className="font-semibold">Tips & Notes</p>
 						<ul className="list-disc pl-5">
-							<li>First prompt is text by default.</li>
-							<li>For groups smaller than 4, the chain will loop so contributions are repeated to keep things funny.</li>
-							<li>Reveal shows the chain chronologically; author names stay hidden until reveal completes.</li>
+							<li>There's no scoring! The goal is just to have fun and see the wacky results.</li>
+							<li>For groups smaller than 4, the chain will loop for longer to make the outcome funnier.</li>
 							<li>Be playful and keep content within community guidelines.</li>
 						</ul>
 					</div>
