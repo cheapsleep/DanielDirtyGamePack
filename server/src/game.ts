@@ -112,7 +112,7 @@ interface Room {
   ccTurnOrder?: string[]; // Order of players
   ccWinnerId?: string;
   ccStackingEnabled?: boolean; // Option to allow stacking +2/+4
-  ccLastAction?: { type: string; playerId: string; playerName: string; card?: CCCard; color?: CCColor; victimId?: string };
+  ccLastAction?: { type: string; playerId: string; playerName: string; card?: CCCard; color?: CCColor };
   ccPendingWildPlayerId?: string; // Player who needs to pick a color
   // Scribble Scrabble: Scrambled fields
   sssRealPrompt?: string; // The real prompt for this round
